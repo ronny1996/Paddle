@@ -123,7 +123,31 @@ class PoolCUDNNOpKernel : public framework::OpKernel<T> {
       out_dims_vec[4] = output->dims()[3];
       transformed_output.Resize(framework::make_ddim(out_dims_vec));
 
-    } else {
+    }
+    #ifdef PADDLE_WITH_HIP
+    else if (data_format == str_NHWC) {
+      layout = DataLayout::kNCHW;
+      auto &dev_ctx =
+          ctx.template device_context<paddle::platform::CUDADeviceContext>();
+      std::vector<int> axis{0, 3, 1, 2};
+      transformed_input.Resize(input->dims());
+      auto in_dims_vec = framework::vectorize(input->dims());
+      in_dims_vec[1] = input->dims()[3];
+      in_dims_vec[2] = input->dims()[1];
+      in_dims_vec[3] = input->dims()[2];
+      transformed_input.Resize(framework::make_ddim(in_dims_vec));
+      transformed_input.mutable_data(ctx.GetPlace(), input->type());
+      math::Transpose<paddle::platform::CUDADeviceContext, T, 4> trans;
+      trans(dev_ctx, *input, &transformed_input, axis);
+      transformed_output.Resize(output->dims());
+      auto out_dims_vec = framework::vectorize(output->dims());
+      out_dims_vec[1] = output->dims()[3];
+      out_dims_vec[2] = output->dims()[1];
+      out_dims_vec[3] = output->dims()[2];
+      transformed_output.Resize(framework::make_ddim(out_dims_vec));
+    }
+    #endif
+    else {
       layout = getLayoutFromStr(data_format);
       transformed_input = *input;
       transformed_output = *output;
@@ -181,6 +205,15 @@ class PoolCUDNNOpKernel : public framework::OpKernel<T> {
       math::Transpose<paddle::platform::CUDADeviceContext, T, 5> trans5_v2;
       trans5_v2(dev_ctx, transformed_output, output, axis);
     }
+    #ifdef PADDLE_WITH_HIP
+    if (data_format == str_NHWC) {
+      auto &dev_ctx =
+          ctx.template device_context<paddle::platform::CUDADeviceContext>();
+      std::vector<int> axis{0, 2, 3, 1};
+      math::Transpose<paddle::platform::CUDADeviceContext, T, 4> trans;
+      trans(dev_ctx, transformed_output, output, axis);
+    }
+    #endif
   }
 };
 

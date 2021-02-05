@@ -87,7 +87,9 @@ class BatchNormKernel<platform::CUDADeviceContext, T>
         fast_nhwc_batch_norm && data_layout == DataLayout::kNHWC
             ? DataLayout::kNHWC
             : DataLayout::kNCHW;
-
+#if PADDLE_WITH_HIP
+    if(data_layout == DataLayout::kNHWC) compute_format = DataLayout::kNCHW;
+#endif
     Tensor transformed_x(x->type());
     Tensor transformed_y(y->type());
     if (data_layout == DataLayout::kNHWC &&

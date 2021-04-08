@@ -48,9 +48,10 @@ enum GroupNormKernelFlags { kHasScale = 1, kHasBias = 2 };
 template <typename T>
 __device__ __inline__ void CudaAtomicAddWithWarp(T* sum, T value) {
   typedef cub::WarpReduce<T> WarpReduce;
-  typename WarpReduce::TempStorage temp_storage;
-  value = WarpReduce(temp_storage).Sum(value);
-  if (cub::LaneId() == 0) platform::CudaAtomicAdd(sum, value);
+  __shared__ typename WarpReduce::TempStorage temp_storage;
+  T reduce_value = WarpReduce(temp_storage).Sum(value);
+  // printf("laneid=%u, value=%f \n", cub::LaneId(), (float)reduce_value);
+  if (cub::LaneId() == 0) platform::CudaAtomicAdd(sum, reduce_value);
 }
 
 template <typename T>
@@ -81,6 +82,8 @@ __global__ void GroupNormForwardGetMeanAndVar(const T* x, int N, int C, int W,
   x_mean /= number * imsize;
   x_var /= number * imsize;
   CudaAtomicAddWithWarp(&mean[bid * groups + gid], x_mean);
+  // printf("mean[%d] += %f = %f\n", (int)(bid * groups + gid), (float)x_mean,
+  //        (float)mean[bid * groups + gid]);
   CudaAtomicAddWithWarp(&var[bid * groups + gid], x_var);
 }
 
@@ -173,8 +176,11 @@ class GroupNormKernel<platform::CUDADeviceContext, T>
 
     int imsize = (data_layout == DataLayout::kNCHW ? x_dims[2] * x_dims[3]
                                                    : x_dims[1] * x_dims[2]);
-
+#ifdef __HIPCC__
+    int block_size = std::max(std::min(256, imsize), 64);
+#else
     int block_size = std::min(1024, imsize);
+#endif
     dim3 grid(group_size, groups, x_dims[0]);
     dim3 threads(block_size, 1, 1);
     GroupNormForwardGetMeanAndVar<T><<<grid, threads, 0, dev_ctx.stream()>>>(
@@ -348,7 +354,11 @@ class GroupNormGradKernel<platform::CUDADeviceContext, T>
     int imsize = (data_layout == DataLayout::kNCHW ? x_dims[2] * x_dims[3]
                                                    : x_dims[1] * x_dims[2]);
 
+#ifdef __HIPCC__
+    int block_size = std::max(std::min(256, imsize), 64);
+#else
     int block_size = std::min(1024, imsize);
+#endif
     dim3 grid(group_size, groups, x_dims[0]);
     dim3 threads(block_size, 1, 1);
     int flags =

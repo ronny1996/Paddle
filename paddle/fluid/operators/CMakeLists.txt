@@ -196,7 +196,7 @@ endif()
 
 if(WITH_ASCEND_CL)
 cc_test(gelu_op_npu_test SRCS gelu_op_npu_test.cc DEPS op_registry gelu_op scope device_context enforce executor)
-cc_test(gaussian_random_op_npu_test SRCS gaussian_random_op_npu_test.cc DEPS gaussian_random_op op_registry scope device_context enforce executor)
+cc_test(gaussian_random_op_npu_test SRCS gaussian_random_op_npu_test.cc DEPS gaussian_random_op op_registry scope device_context enforce executor generator)
 endif()
 
 if (WITH_GPU OR WITH_ASCEND_CL)

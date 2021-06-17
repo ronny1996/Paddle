@@ -33,7 +33,7 @@ void TestGaussianRandomOp(const platform::DeviceContext& ctx) {
 
   desc.SetInput("ShapeTensor", {"ShapeTensor"});
   framework::DDim shape_tensor_dims({2});
-  std::vector<T> shape_tensor_data({2, 3});
+  std::vector<int> shape_tensor_data({2, 3});
   size_t shape_tensor_numel =
       static_cast<size_t>(framework::product(shape_tensor_dims));
   auto shape_tensor =

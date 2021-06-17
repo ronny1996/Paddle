@@ -39,7 +39,11 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
     const std::string data_format = ctx.Attr<std::string>("data_format");
     const bool channel_last = (data_format == "NHWC" || data_format == "NDHWC");
 
-    const auto& runner = NpuOpRunner("Conv2D", {}, {}, {});
+    const auto& runner =
+        NpuOpRunner("Conv2D", {input, filter}, {}, {{"strides", {1, 1, 1, 1}},
+                                                    {"pads", {0, 0, 0, 0}},
+                                                    {"dilations", {1, 1, 1, 1}},
+                                                    {"groups", groups}});
 
     auto stream = dev_ctx.stream();
     runner.Run(stream);

@@ -18,40 +18,32 @@
 #include "gtest/gtest.h"
 #include "paddle/fluid/framework/op_registry.h"
 
-USE_OP(gather);
+USE_OP(gaussian_random);
 
 namespace paddle {
 namespace operators {
 
 template <typename T>
-void TestGatherOP(const platform::DeviceContext& ctx) {
+void TestGaussianRandomOp(const platform::DeviceContext& ctx) {
   auto place = ctx.GetPlace();
   framework::OpDesc desc;
   framework::Scope scope;
 
-  desc.SetType("gather");
+  desc.SetType("gaussian_random");
 
-  desc.SetInput("X", {"X"});
-  framework::DDim input_dims({3, 2});
-  size_t input_numel = static_cast<size_t>(framework::product(input_dims));
-  auto input_tensor = scope.Var("X")->GetMutable<framework::LoDTensor>();
-  std::vector<T> input_data({1, 2, 3, 4, 5, 6});
-  framework::TensorFromVector(input_data, ctx, input_tensor);
-  input_tensor->Resize(input_dims);
-
-  desc.SetInput("Index", {"Index"});
-  framework::DDim index_dims({2});
-  size_t index_numel = static_cast<size_t>(framework::product(index_dims));
-  auto index_tensor = scope.Var("Index")->GetMutable<framework::LoDTensor>();
-  std::vector<int64_t> index_data({1, 2});
-  framework::TensorFromVector(index_data, ctx, index_tensor);
-  index_tensor->Resize(index_dims);
+  desc.SetInput("ShapeTensor", {"ShapeTensor"});
+  framework::DDim shape_tensor_dims({2});
+  std::vector<T> shape_tensor_data({2, 3});
+  size_t shape_tensor_numel =
+      static_cast<size_t>(framework::product(shape_tensor_dims));
+  auto shape_tensor =
+      scope.Var("ShapeTensor")->GetMutable<framework::LoDTensor>();
+  framework::TensorFromVector(shape_tensor_data, ctx, shape_tensor);
+  shape_tensor->Resize(shape_tensor_dims);
 
   desc.SetOutput("Out", {"Out"});
-  auto output_tensor = scope.Var("Out")->GetMutable<framework::LoDTensor>();
-
+  auto out_tensor = scope.Var("Out")->GetMutable<framework::LoDTensor>();
   auto op = framework::OpRegistry::CreateOp(desc);
-
   auto before_run_str = op->DebugStringEx(&scope);
   LOG(INFO) << before_run_str;
 
@@ -61,14 +53,20 @@ void TestGatherOP(const platform::DeviceContext& ctx) {
   auto after_run_str = op->DebugStringEx(&scope);
   LOG(INFO) << after_run_str;
 
-  printf("output_tensor dims is: %s\n", output_tensor->dims().to_str().c_str());
+  size_t out_tensor_numel =
+      static_cast<size_t>(framework::product(out_tensor->dims()));
+  printf("output_tensor dims is: %s\n", out_tensor->dims().to_str().c_str());
+  auto out_data = out_tensor->data<T>();
+  for (size_t i = 0; i < out_tensor_numel; i++) {
+    printf("%f ", static_cast<float>(out_data[i]));
+  }
 }
 
-#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+#if defined(PADDLE_WITH_ASCEND_CL)
 TEST(test_gather_op, gpu_place) {
-  platform::CUDAPlace place(0);
-  platform::CUDADeviceContext ctx(place);
-  TestGatherOP<float>(ctx);
+  platform::NPUPlace place(0);
+  platform::NPUDeviceContext ctx(place);
+  TestGaussianRandomOp<float>(ctx);
 }
 #endif
 

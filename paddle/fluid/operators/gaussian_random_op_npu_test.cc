@@ -19,7 +19,7 @@
 #include "paddle/fluid/framework/op_registry.h"
 
 USE_OP(gaussian_random);
-
+USE_OP_DEVICE_KERNEL(gaussian_random, NPU);
 namespace paddle {
 namespace operators {
 

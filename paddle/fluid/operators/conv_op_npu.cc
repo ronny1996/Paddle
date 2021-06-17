@@ -17,6 +17,7 @@ limitations under the License. */
 #include "paddle/fluid/framework/operator.h"
 #include "paddle/fluid/operators/fill_constant_op.h"
 #include "paddle/fluid/operators/npu_op_runner.h"
+#include "paddle/fluid/platform/npu_helper.h"
 
 namespace paddle {
 namespace operators {

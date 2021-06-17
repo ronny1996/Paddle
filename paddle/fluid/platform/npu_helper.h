@@ -34,6 +34,12 @@ limitations under the License. */
 
 namespace paddle {
 namespace platform {
+struct float16;
+}  // namespace platform
+}  // namespace paddle
+
+namespace paddle {
+namespace platform {
 
 ge::DataType VarTypeToGeType(paddle::framework::proto::VarType::Type type) {
   if (type == paddle::framework::proto::VarType::FP16) {
@@ -52,6 +58,32 @@ ge::DataType VarTypeToGeType(paddle::framework::proto::VarType::Type type) {
         paddle::framework::DataTypeToString(type)));
   }
 }
+
+template <typename T>
+class GeDataType;
+
+#define DECLARE_GE_DATA_TYPE(DTYPE, SCALING_TYPE, BN_TYPE, GE_TYPE) \
+  template <>                                                       \
+  class GeDataType<DTYPE> {                                         \
+   public:                                                          \
+    static const ge::DataType type = GE_TYPE;                       \
+    using ScalingParamType = const SCALING_TYPE;                    \
+    using BatchNormParamType = BN_TYPE;                             \
+    static ScalingParamType* kOne() {                               \
+      static ScalingParamType v = 1.0;                              \
+      return &v;                                                    \
+    }                                                               \
+    static ScalingParamType* kZero() {                              \
+      static ScalingParamType v = 0.0;                              \
+      return &v;                                                    \
+    }                                                               \
+  }
+
+DECLARE_GE_DATA_TYPE(float16, float, float, ge::DataType::DT_FLOAT16);
+DECLARE_GE_DATA_TYPE(float, float, float, ge::DataType::DT_FLOAT);
+DECLARE_GE_DATA_TYPE(double, double, double, ge::DataType::DT_DOUBLE);
+
+#undef DECLARE_GE_DATA_TYPE
 
 }  // namespace platform
 }  // namespace paddle

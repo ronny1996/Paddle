@@ -60,10 +60,17 @@ void TestGaussianRandomOp(const platform::DeviceContext& ctx) {
   for (size_t i = 0; i < out_tensor_numel; i++) {
     printf("%f ", static_cast<float>(out_data[i]));
   }
+  printf("\n");
+}
+
+TEST(test_gather_op, cpu_place) {
+  platform::CPUPlace place;
+  platform::CPUDeviceContext ctx(place);
+  TestGaussianRandomOp<float>(ctx);
 }
 
 #if defined(PADDLE_WITH_ASCEND_CL)
-TEST(test_gather_op, gpu_place) {
+TEST(test_gather_op, npu_place) {
   platform::NPUPlace place(0);
   platform::NPUDeviceContext ctx(place);
   TestGaussianRandomOp<float>(ctx);

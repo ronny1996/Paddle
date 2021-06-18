@@ -61,16 +61,16 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
       transformed_filter_channel.ShareDataWith(*filter);
     } else {
       VLOG(3) << "Transform input tensor from NCHW to NHWC.";
-      ResizeToChannelFirst<platform::CUDADeviceContext, T>(
+      ResizeToChannelFirst<platform::NPUDeviceContext, T>(
           ctx, input, &transformed_input_channel);
-      TransToChannelFirst<platform::CUDADeviceContext, T>(
+      TransToChannelFirst<platform::NPUDeviceContext, T>(
           ctx, input, &transformed_input_channel);
-      ResizeToChannelFirst<platform::CUDADeviceContext, T>(ctx, output,
-                                                           &transformed_output);
+      ResizeToChannelFirst<platform::NPUDeviceContext, T>(ctx, output,
+                                                          &transformed_output);
 
-      ResizeToChannelLast<platform::CUDADeviceContext, T>(
+      ResizeToChannelLast<platform::NPUDeviceContext, T>(
           ctx, filter, &transformed_filter_channel);
-      TransToChannelLast<platform::CUDADeviceContext, T>(
+      TransToChannelLast<platform::NPUDeviceContext, T>(
           ctx, filter, &transformed_filter_channel);
     }
 

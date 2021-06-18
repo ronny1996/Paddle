@@ -42,7 +42,7 @@ class NPUGaussianRandomKernel : public framework::OpKernel<T> {
     auto dtype = ConvertToNpuDtype(out->type());
 
     const auto& runner = NpuOpRunner(
-        "RandomStandardNormal", {out_shape}, {*out},
+        "StandardNormal", {out_shape}, {*out},
         {{"dtype", dtype}, {"seed", seed}, {"seed2", static_cast<int>(0)}});
 
     auto stream =

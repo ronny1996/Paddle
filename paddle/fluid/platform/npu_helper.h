@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 #pragma once
+
 #ifdef PADDLE_WITH_ASCEND_CL
 #include <glog/logging.h>
 
@@ -41,6 +42,8 @@ struct float16;
 namespace paddle {
 namespace platform {
 
+// see
+// Ascend/ascend-toolkit/3.3.0.alpha002/arm64-linux/atc/include/graph/types.h
 ge::DataType VarTypeToGeType(paddle::framework::proto::VarType::Type type) {
   if (type == paddle::framework::proto::VarType::FP16) {
     return ge::DataType::DT_FLOAT16;

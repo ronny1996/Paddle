@@ -27,7 +27,8 @@ class NPUGaussianRandomKernel : public framework::OpKernel<T> {
   void Compute(const framework::ExecutionContext& ctx) const override {
     auto* out = ctx.Output<framework::Tensor>("Out");
     framework::Tensor out_shape;
-
+    auto shape = GetShape(ctx);
+    out->Resize(shape);
     out->mutable_data<T>(ctx.GetPlace());
     out_shape.mutable_data<int>(framework::make_ddim({out->dims().size()}),
                                 out->place());
@@ -37,7 +38,8 @@ class NPUGaussianRandomKernel : public framework::OpKernel<T> {
 
     auto seed = ctx.Attr<int>("seed");
 
-    auto dtype = paddle::platform::VarTypeToGeType(out->type());
+    // auto dtype = paddle::platform::VarTypeToGeType(out->type());
+    auto dtype = ConvertToNpuDtype(out->type());
 
     const auto& runner = NpuOpRunner(
         "RandomStandardNormal", {out_shape}, {*out},

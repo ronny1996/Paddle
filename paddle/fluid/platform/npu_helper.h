@@ -41,53 +41,53 @@ struct float16;
 
 namespace paddle {
 namespace platform {
-
+#if 0
 // see
 // Ascend/ascend-toolkit/3.3.0.alpha002/arm64-linux/atc/include/graph/types.h
-// ge::DataType VarTypeToGeType(paddle::framework::proto::VarType::Type type) {
-//   if (type == paddle::framework::proto::VarType::FP16) {
-//     return ge::DataType::DT_FLOAT16;
-//   } else if (type == paddle::framework::proto::VarType::FP32) {
-//     return ge::DataType::DT_FLOAT;
-//   } else if (type == paddle::framework::proto::VarType::FP64) {
-//     return ge::DataType::DT_DOUBLE;
-//   } else if (type == paddle::framework::proto::VarType::INT32) {
-//     return ge::DataType::DT_INT32;
-//   } else if (type == paddle::framework::proto::VarType::INT64) {
-//     return ge::DataType::DT_INT64;
-//   } else {
-//     PADDLE_THROW(paddle::platform::errors::Unimplemented(
-//         "Not support %s as tensor type.",
-//         paddle::framework::DataTypeToString(type)));
-//   }
-// }
+ge::DataType VarTypeToGeType(paddle::framework::proto::VarType::Type type) {
+  if (type == paddle::framework::proto::VarType::FP16) {
+    return ge::DataType::DT_FLOAT16;
+  } else if (type == paddle::framework::proto::VarType::FP32) {
+    return ge::DataType::DT_FLOAT;
+  } else if (type == paddle::framework::proto::VarType::FP64) {
+    return ge::DataType::DT_DOUBLE;
+  } else if (type == paddle::framework::proto::VarType::INT32) {
+    return ge::DataType::DT_INT32;
+  } else if (type == paddle::framework::proto::VarType::INT64) {
+    return ge::DataType::DT_INT64;
+  } else {
+    PADDLE_THROW(paddle::platform::errors::Unimplemented(
+        "Not support %s as tensor type.",
+        paddle::framework::DataTypeToString(type)));
+  }
+}
 
-// template <typename T>
-// class GeDataType;
+template <typename T>
+class GeDataType;
 
-// #define DECLARE_GE_DATA_TYPE(DTYPE, SCALING_TYPE, BN_TYPE, GE_TYPE) \
-//   template <>                                                       \
-//   class GeDataType<DTYPE> {                                         \
-//    public:                                                          \
-//     static const ge::DataType type = GE_TYPE;                       \
-//     using ScalingParamType = const SCALING_TYPE;                    \
-//     using BatchNormParamType = BN_TYPE;                             \
-//     static ScalingParamType* kOne() {                               \
-//       static ScalingParamType v = 1.0;                              \
-//       return &v;                                                    \
-//     }                                                               \
-//     static ScalingParamType* kZero() {                              \
-//       static ScalingParamType v = 0.0;                              \
-//       return &v;                                                    \
-//     }                                                               \
-//   }
+#define DECLARE_GE_DATA_TYPE(DTYPE, SCALING_TYPE, BN_TYPE, GE_TYPE) \
+  template <>                                                       \
+  class GeDataType<DTYPE> {                                         \
+   public:                                                          \
+    static const ge::DataType type = GE_TYPE;                       \
+    using ScalingParamType = const SCALING_TYPE;                    \
+    using BatchNormParamType = BN_TYPE;                             \
+    static ScalingParamType* kOne() {                               \
+      static ScalingParamType v = 1.0;                              \
+      return &v;                                                    \
+    }                                                               \
+    static ScalingParamType* kZero() {                              \
+      static ScalingParamType v = 0.0;                              \
+      return &v;                                                    \
+    }                                                               \
+  }
 
-// DECLARE_GE_DATA_TYPE(float16, float, float, ge::DataType::DT_FLOAT16);
-// DECLARE_GE_DATA_TYPE(float, float, float, ge::DataType::DT_FLOAT);
-// DECLARE_GE_DATA_TYPE(double, double, double, ge::DataType::DT_DOUBLE);
+DECLARE_GE_DATA_TYPE(float16, float, float, ge::DataType::DT_FLOAT16);
+DECLARE_GE_DATA_TYPE(float, float, float, ge::DataType::DT_FLOAT);
+DECLARE_GE_DATA_TYPE(double, double, double, ge::DataType::DT_DOUBLE);
 
-// #undef DECLARE_GE_DATA_TYPE
-
+#undef DECLARE_GE_DATA_TYPE
+#endif
 }  // namespace platform
 }  // namespace paddle
 #endif  // PADDLE_WITH_ASCEND_CL

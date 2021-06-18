@@ -62,7 +62,7 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
     } else {
       VLOG(3) << "Transform input tensor from NCHW to NHWC.";
       ResizeToChannelFirst<platform::NPUDeviceContext, T>(
-      //     ctx, input, &transformed_input_channel);
+          ctx, input, &transformed_input_channel);
       // TransToChannelFirst<platform::NPUDeviceContext, T>(
       //     ctx, input, &transformed_input_channel);
       ResizeToChannelFirst<platform::NPUDeviceContext, T>(ctx, output,

@@ -43,6 +43,23 @@ void TestBatchNormOp(const platform::DeviceContext& ctx) {
   framework::TensorFromVector(x_tensor_data, ctx, x_tensor);
   x_tensor->Resize(x_tensor_dims);
 
+  desc.SetInput("Mean", {"Mean"});
+  framework::DDim mean_tensor_dims({1, 1, 2, 2});
+  std::vector<float> mean_tensor_data({1, 1, 1, 1, 2, 2, 2, 2});
+  int mean_tensor_numel =
+      static_cast<int>(framework::product(mean_tensor_dims));
+  auto mean_tensor = scope.Var("Mean")->GetMutable<framework::LoDTensor>();
+  framework::TensorFromVector(mean_tensor_data, ctx, mean_tensor);
+  mean_tensor->Resize(mean_tensor_dims);
+
+  desc.SetInput("Variance", {"Variance"});
+  framework::DDim var_tensor_dims({1, 1, 2, 2});
+  std::vector<float> var_tensor_data({1, 1, 1, 1, 2, 2, 2, 2});
+  int var_tensor_numel = static_cast<int>(framework::product(var_tensor_dims));
+  auto var_tensor = scope.Var("Variance")->GetMutable<framework::LoDTensor>();
+  framework::TensorFromVector(var_tensor_data, ctx, var_tensor);
+  var_tensor->Resize(var_tensor_dims);
+
   desc.SetInput("Scale", {"Scale"});
   framework::DDim scale_tensor_dims({1});
   std::vector<float> scale_tensor_data({1});

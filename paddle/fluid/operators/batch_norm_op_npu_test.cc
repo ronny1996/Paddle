@@ -101,13 +101,13 @@ void TestBatchNormOp(const platform::DeviceContext& ctx) {
   int out_tensor_numel =
       static_cast<int>(framework::product(out_tensor->dims()));
   // get output
-  std::vector<T> output_data;
-  framework::TensorToVector(*output_tensor, ctx, &output_data);
+  std::vector<T> out_tensor_data;
+  framework::TensorToVector(*out_tensor, ctx, &out_tensor_data);
   printf("output_tensor dims is: %s\n", output_tensor->dims().to_str().c_str());
 
-  for (int i = 0; i < output_numel; ++i) {
+  for (int i = 0; i < out_tensor_numel; ++i) {
     printf("output[%02d] = %5.1f\n", static_cast<int>(i),
-           static_cast<float>(output_data[i]));
+           static_cast<float>(out_tensor_data[i]));
   }
 }
 

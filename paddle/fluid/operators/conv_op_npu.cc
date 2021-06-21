@@ -163,7 +163,7 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
       data_format_str = "NHWC";
     }
 
-    if (input_grad) {
+    if (filter_grad) {
       framework::Tensor filter_shape_tensor;
       std::vector<int> filter_shape_vec =
           framework::vectorize<int>(filter->dims());
@@ -179,7 +179,7 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
       auto stream = dev_ctx.stream();
       runner.Run(stream);
     }
-    if (filter_grad) {
+    if (input_grad) {
       framework::Tensor input_shape_tensor;
       std::vector<int> input_shape_vec =
           framework::vectorize<int>(input->dims());

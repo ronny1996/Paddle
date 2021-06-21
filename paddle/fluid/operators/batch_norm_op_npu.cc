@@ -30,6 +30,7 @@ class NPUBatchNormOpKernel : public framework::OpKernel<T> {
   void Compute(const framework::ExecutionContext &ctx) const override {
     auto &dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
     float epsilon = ctx.Attr<float>("epsilon");
+    float momentum = ctx.Attr<float>("momentum");
     const bool is_test = ctx.Attr<bool>("is_test");
     const bool use_global_stats = ctx.Attr<bool>("use_global_stats");
     const bool trainable_stats = ctx.Attr<bool>("trainable_statistics");
@@ -70,12 +71,42 @@ class NPUBatchNormOpKernel : public framework::OpKernel<T> {
       saved_mean->mutable_data<T>(ctx.GetPlace());
       saved_variance->mutable_data<T>(ctx.GetPlace());
 
+      framework::Tensor mean_tmp;
+      mean_tmp.mutable_data<float>(mean_out->dims(), ctx.GetPlace());
+      framework::Tensor variance_tmp;
+      variance_tmp.mutable_data<float>(variance_out->dims(), ctx.GetPlace());
+
       const auto &runner = NpuOpRunner(
           "BatchNorm", {*x, *scale, *bias},
-          {*y, *mean_out, *variance_out, *saved_mean, *saved_variance},
+          {*y, mean_tmp, variance_tmp, *saved_mean, *saved_variance},
           {{"epsilon", epsilon},
            {"is_training", training},
            {"data_format", data_format_str}});
+
+      auto stream = dev_ctx.stream();
+      runner.Run(stream);
+      framework::Tensor this_factor_tensor;
+      this_factor_tensor.mutable_data<float>(framework::make_ddim({1}),
+                                             ctx.GetPlace());
+      framework::TensorFromVector<float>({static_cast<float>(1. - momentum)},
+                                         &this_factor_tensor);
+      framework::Tensor momentum_tensor;
+      momentum_tensor.mutable_data<float>(framework::make_ddim({1}),
+                                          ctx.GetPlace());
+      framework::TensorFromVector<float>({static_cast<float>(momentum)},
+                                         &momentum_tensor);
+      framework::Tensor zeros_tensor;
+      zeros_tensor.mutable_data<float>(mean_out->dims(), ctx.GetPlace());
+      const auto &runner =
+          NpuOpRunner("Constant", {}, {*zeros_tensor}, {{"value", 0.0f}});
+      const auto &runner = NpuOpRunner("AddMatMatElements",
+                                       {*mean_out, *saved_mean, *zeros_tensor,
+                                        this_factor_tensor, momentum_tensor},
+                                       {*mean_out}, {});
+      const auto &runner = NpuOpRunner(
+          "AddMatMatElements", {*variance_out, *saved_variance, *zeros_tensor,
+                                this_factor_tensor, momentum_tensor},
+          {*variance_out}, {});
       auto stream = dev_ctx.stream();
       runner.Run(stream);
     }

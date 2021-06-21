@@ -47,7 +47,7 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
     const std::string data_format = ctx.Attr<std::string>("data_format");
 
     // transform
-    const bool channel_last = (data_format == "NHWC" || data_format == "NDHWC");
+    const bool channel_last = data_format == "NHWC";
 
     // update padding and dilation
     auto in_dims = input->dims();
@@ -55,19 +55,40 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
     framework::DDim in_data_dims;
     framework::DDim filter_data_dims;
 
-    in_data_dims = framework::slice_ddim(in_dims, 1, in_dims.size() - 1);
-    filter_data_dims = framework::slice_ddim(filter_dims, 0, 2);
+    if (channel_last) {
+      in_data_dims = framework::slice_ddim(in_dims, 1, in_dims.size() - 1);
+      filter_data_dims =
+          framework::slice_ddim(filter_dims, 1, in_dims.size() - 1);
+    } else {
+      in_data_dims = framework::slice_ddim(in_dims, 2, in_dims.size());
+      filter_data_dims = framework::slice_ddim(filter_dims, 2, in_dims.size());
+    }
 
     std::vector<int> ksize = framework::vectorize<int>(filter_data_dims);
     UpdatePaddingAndDilation(&paddings, &dilations, padding_algorithm,
                              in_data_dims, strides, ksize);
 
-    const auto& runner = NpuOpRunner(
-        "Conv2D", {*input, *filter}, {*output},
-        {{"strides", std::vector<int64_t>({1, 1, strides[0], strides[1]})},
-         {"pads", std::vector<int64_t>({0, 0, 0, 0})},
-         {"dilations", std::vector<int64_t>({1, 1, 1, 1})},
-         {"groups", groups}});
+    std::vector<int> strides_vec(4, 1);
+    std::vector<int> dilations_vec(4, 1);
+
+    if (channel_last) {
+      strides_vec[1] = strides[0];
+      strides_vec[2] = strides[1];
+      dilations_vec[1] = dilations[0];
+      dilations_vec[2] = dilations[1];
+    } else {
+      strides_vec[2] = strides[0];
+      strides_vec[3] = strides[1];
+      dilations_vec[2] = dilations[0];
+      dilations_vec[3] = dilations[1];
+    }
+
+    const auto& runner =
+        NpuOpRunner("Conv2D", {*input, *filter}, {*output},
+                    {{"strides", std::vector<int64_t>(strides_vec)},
+                     {"pads", std::vector<int64_t>(paddings)},
+                     {"dilations", std::vector<int64_t>(dilations_vec)},
+                     {"groups", groups}});
 
     auto stream = dev_ctx.stream();
     runner.Run(stream);

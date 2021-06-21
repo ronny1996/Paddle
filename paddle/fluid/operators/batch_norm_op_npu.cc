@@ -82,9 +82,9 @@ class NPUBatchNormOpKernel : public framework::OpKernel<T> {
           {{"epsilon", epsilon},
            {"is_training", training},
            {"data_format", data_format_str}});
-
       auto stream = dev_ctx.stream();
       runner.Run(stream);
+      // Ascend can't output the estimated mean and variance
       framework::Tensor this_factor_tensor;
       this_factor_tensor.mutable_data<float>(framework::make_ddim({1}),
                                              ctx.GetPlace());
@@ -95,20 +95,22 @@ class NPUBatchNormOpKernel : public framework::OpKernel<T> {
                                           ctx.GetPlace());
       framework::TensorFromVector<float>({static_cast<float>(momentum)},
                                          &momentum_tensor);
-      framework::Tensor zeros_tensor;
-      zeros_tensor.mutable_data<float>(mean_out->dims(), ctx.GetPlace());
-      const auto &runner =
-          NpuOpRunner("Constant", {}, {*zeros_tensor}, {{"value", 0.0f}});
-      const auto &runner = NpuOpRunner("AddMatMatElements",
-                                       {*mean_out, *saved_mean, *zeros_tensor,
-                                        this_factor_tensor, momentum_tensor},
-                                       {*mean_out}, {});
-      const auto &runner = NpuOpRunner(
-          "AddMatMatElements", {*variance_out, *saved_variance, *zeros_tensor,
+      framework::Tensor ones_tensor;
+      ones_tensor.mutable_data<float>(mean_out->dims(), ctx.GetPlace());
+      framework::TensorFromVector<float>(
+          std::vector<float>(framework::product(mean_out->dims()), 1.0f),
+          &ones_tensor);
+
+      const auto &runner1 = NpuOpRunner("AddMatMatElements",
+                                        {*mean_out, *saved_mean, ones_tensor,
+                                         this_factor_tensor, momentum_tensor},
+                                        {*mean_out}, {});
+      runner1.Run(stream);
+      const auto &runner2 = NpuOpRunner(
+          "AddMatMatElements", {*variance_out, *saved_variance, ones_tensor,
                                 this_factor_tensor, momentum_tensor},
           {*variance_out}, {});
-      auto stream = dev_ctx.stream();
-      runner.Run(stream);
+      runner2.Run(stream);
     }
   }
 };

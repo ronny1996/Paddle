@@ -91,7 +91,7 @@ void TestConv2D(const platform::DeviceContext& ctx, const bool use_cudnn) {
   // feed filter data
   std::vector<T> filter_data(filter_numel);
   for (size_t i = 0; i < filter_numel; ++i) {
-    filter_data[i] = i;
+    filter_data[i] = 1;
   }
   framework::TensorFromVector(filter_data, ctx, filter_tensor);
   filter_tensor->Resize(filter_dims);

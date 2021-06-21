@@ -31,6 +31,9 @@ void TestBatchNormOp(const platform::DeviceContext& ctx) {
   framework::Scope scope;
 
   desc.SetType("batch_norm");
+  desc.SetAttr("is_test", false);
+  desc.SetAttr("use_global_stats", false);
+  desc.SetAttr("data_layout", "NCHW");
 
   desc.SetInput("X", {"X"});
   framework::DDim x_tensor_dims({1, 1, 2, 2});

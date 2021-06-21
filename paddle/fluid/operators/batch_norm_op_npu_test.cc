@@ -80,15 +80,19 @@ void TestBatchNormOp(const platform::DeviceContext& ctx) {
   desc.SetOutput("MeanOut", {"MeanOut"});
   auto mean_out_tensor =
       scope.Var("MeanOut")->GetMutable<framework::LoDTensor>();
+  mean_out_tensor->Resize(mean_tensor_dims);
   desc.SetOutput("VarianceOut", {"VarianceOut"});
   auto variance_out_tensor =
       scope.Var("VarianceOut")->GetMutable<framework::LoDTensor>();
+  variance_out_tensor->Resize(mean_tensor_dims);
   desc.SetOutput("SavedMean", {"SavedMean"});
   auto saved_mean_tensor =
       scope.Var("SavedMean")->GetMutable<framework::LoDTensor>();
+  saved_mean_tensor->Resize(mean_tensor_dims);
   desc.SetOutput("SavedVariance", {"SavedVariance"});
   auto saved_variance_tensor =
       scope.Var("SavedVariance")->GetMutable<framework::LoDTensor>();
+  saved_variance_tensor->Resize(mean_tensor_dims);
 
   desc.SetOutput("Y", {"Y"});
   auto out_tensor = scope.Var("Y")->GetMutable<framework::LoDTensor>();

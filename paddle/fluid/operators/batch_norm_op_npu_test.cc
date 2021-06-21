@@ -35,7 +35,7 @@ void TestBatchNormOp(const platform::DeviceContext& ctx) {
   desc.SetAttr("use_global_stats", false);
 
   desc.SetInput("X", {"X"});
-  framework::DDim x_tensor_dims({1, 1, 2, 2});
+  framework::DDim x_tensor_dims({2, 1, 2, 2});
   std::vector<float> x_tensor_data({1, 1, 1, 1, 2, 2, 2, 2});
   int x_tensor_numel = static_cast<int>(framework::product(x_tensor_dims));
   auto x_tensor = scope.Var("X")->GetMutable<framework::LoDTensor>();
@@ -100,10 +100,14 @@ void TestBatchNormOp(const platform::DeviceContext& ctx) {
 
   int out_tensor_numel =
       static_cast<int>(framework::product(out_tensor->dims()));
-  printf("output_tensor dims is: %s\n", out_tensor->dims().to_str().c_str());
-  auto out_data = out_tensor->data<T>();
-  for (int i = 0; i < out_tensor_numel; i++) {
-    printf("%f ", static_cast<float>(out_data[i]));
+  // get output
+  std::vector<T> output_data;
+  framework::TensorToVector(*output_tensor, ctx, &output_data);
+  printf("output_tensor dims is: %s\n", output_tensor->dims().to_str().c_str());
+
+  for (int i = 0; i < output_numel; ++i) {
+    printf("output[%02d] = %5.1f\n", static_cast<int>(i),
+           static_cast<float>(output_data[i]));
   }
 }
 

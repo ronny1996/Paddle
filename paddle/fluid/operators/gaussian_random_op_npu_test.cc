@@ -55,12 +55,15 @@ void TestGaussianRandomOp(const platform::DeviceContext& ctx) {
 
   size_t out_tensor_numel =
       static_cast<size_t>(framework::product(out_tensor->dims()));
-  printf("output_tensor dims is: %s\n", out_tensor->dims().to_str().c_str());
-  auto out_data = out_tensor->data<T>();
-  for (size_t i = 0; i < out_tensor_numel; i++) {
-    printf("%f ", static_cast<float>(out_data[i]));
+  // get output
+  std::vector<T> output_data;
+  framework::TensorToVector(*output_tensor, ctx, &output_data);
+  printf("output_tensor dims is: %s\n", output_tensor->dims().to_str().c_str());
+
+  for (int i = 0; i < output_numel; ++i) {
+    printf("output[%02d] = %5.1f\n", static_cast<int>(i),
+           static_cast<float>(output_data[i]));
   }
-  printf("\n");
 }
 
 TEST(test_gather_op, cpu_place) {

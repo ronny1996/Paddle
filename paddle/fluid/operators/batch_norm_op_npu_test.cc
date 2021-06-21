@@ -70,7 +70,7 @@ void TestBatchNormOp(const platform::DeviceContext& ctx) {
 
   desc.SetInput("Bias", {"Bias"});
   framework::DDim bias_tensor_dims({1});
-  std::vector<float> bias_tensor_data({1});
+  std::vector<float> bias_tensor_data({0});
   int bias_tensor_numel =
       static_cast<int>(framework::product(bias_tensor_dims));
   auto bias_tensor = scope.Var("Bias")->GetMutable<framework::LoDTensor>();

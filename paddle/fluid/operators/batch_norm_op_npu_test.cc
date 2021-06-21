@@ -33,7 +33,6 @@ void TestBatchNormOp(const platform::DeviceContext& ctx) {
   desc.SetType("batch_norm");
   desc.SetAttr("is_test", false);
   desc.SetAttr("use_global_stats", false);
-  desc.SetAttr("data_layout", "NCHW");
 
   desc.SetInput("X", {"X"});
   framework::DDim x_tensor_dims({1, 1, 2, 2});
@@ -44,8 +43,8 @@ void TestBatchNormOp(const platform::DeviceContext& ctx) {
   x_tensor->Resize(x_tensor_dims);
 
   desc.SetInput("Mean", {"Mean"});
-  framework::DDim mean_tensor_dims({1, 1, 2, 2});
-  std::vector<float> mean_tensor_data({1, 1, 1, 1, 2, 2, 2, 2});
+  framework::DDim mean_tensor_dims({1});
+  std::vector<float> mean_tensor_data({1});
   int mean_tensor_numel =
       static_cast<int>(framework::product(mean_tensor_dims));
   auto mean_tensor = scope.Var("Mean")->GetMutable<framework::LoDTensor>();
@@ -53,8 +52,8 @@ void TestBatchNormOp(const platform::DeviceContext& ctx) {
   mean_tensor->Resize(mean_tensor_dims);
 
   desc.SetInput("Variance", {"Variance"});
-  framework::DDim var_tensor_dims({1, 1, 2, 2});
-  std::vector<float> var_tensor_data({1, 1, 1, 1, 2, 2, 2, 2});
+  framework::DDim var_tensor_dims({1});
+  std::vector<float> var_tensor_data({1});
   int var_tensor_numel = static_cast<int>(framework::product(var_tensor_dims));
   auto var_tensor = scope.Var("Variance")->GetMutable<framework::LoDTensor>();
   framework::TensorFromVector(var_tensor_data, ctx, var_tensor);

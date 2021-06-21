@@ -20,6 +20,7 @@
 
 USE_OP(conv2d);
 USE_OP_DEVICE_KERNEL(conv2d, NPU);
+USE_OP_DEVICE_KERNEL(conv2d, CPU);
 
 namespace paddle {
 namespace operators {

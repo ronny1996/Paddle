@@ -109,6 +109,46 @@ void TestBatchNormOp(const platform::DeviceContext& ctx) {
     printf("output[%02d] = %5.1f\n", static_cast<int>(i),
            static_cast<float>(out_tensor_data[i]));
   }
+
+  out_tensor_numel =
+      static_cast<int>(framework::product(saved_mean_tensor->dims()));
+  framework::TensorToVector(*saved_mean_tensor, ctx, &out_tensor_data);
+  printf("saved_mean_tensor dims is: %s\n",
+         out_tensor->dims().to_str().c_str());
+
+  for (int i = 0; i < out_tensor_numel; ++i) {
+    printf("saved_mean[%02d] = %5.1f\n", static_cast<int>(i),
+           static_cast<float>(out_tensor_data[i]));
+  }
+
+  out_tensor_numel =
+      static_cast<int>(framework::product(saved_variance_tensor->dims()));
+  framework::TensorToVector(*saved_variance_tensor, ctx, &out_tensor_data);
+  printf("saved_variance_tensor dims is: %s\n",
+         out_tensor->dims().to_str().c_str());
+
+  for (int i = 0; i < out_tensor_numel; ++i) {
+    printf("saved_variance[%02d] = %5.1f\n", static_cast<int>(i),
+           static_cast<float>(out_tensor_data[i]));
+  }
+
+  out_tensor_numel = static_cast<int>(framework::product(mean_tensor->dims()));
+  framework::TensorToVector(*mean_tensor, ctx, &out_tensor_data);
+  printf("mean_tensor dims is: %s\n", out_tensor->dims().to_str().c_str());
+
+  for (int i = 0; i < out_tensor_numel; ++i) {
+    printf("mean[%02d] = %5.1f\n", static_cast<int>(i),
+           static_cast<float>(out_tensor_data[i]));
+  }
+
+  out_tensor_numel = static_cast<int>(framework::product(var_tensor->dims()));
+  framework::TensorToVector(*var_tensor, ctx, &out_tensor_data);
+  printf("var_tensor dims is: %s\n", out_tensor->dims().to_str().c_str());
+
+  for (int i = 0; i < out_tensor_numel; ++i) {
+    printf("var[%02d] = %5.1f\n", static_cast<int>(i),
+           static_cast<float>(out_tensor_data[i]));
+  }
 }
 
 TEST(test_batch_op, cpu_place) {

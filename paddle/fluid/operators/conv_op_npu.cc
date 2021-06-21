@@ -50,8 +50,8 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
     const bool channel_last = (data_format == "NHWC" || data_format == "NDHWC");
 
     // update padding and dilation
-    auto in_dims = input.dims();
-    auto filter_dims = filter.dims();
+    auto in_dims = input->dims();
+    auto filter_dims = filter->dims();
     framework::DDim in_data_dims;
     framework::DDim filter_data_dims;
 
@@ -62,12 +62,12 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
     UpdatePaddingAndDilation(&paddings, &dilations, padding_algorithm,
                              in_data_dims, strides, ksize);
 
-    const auto& runner =
-        NpuOpRunner("Conv2D", {*input, *filter}, {*output},
-                    {{"strides", {1, 1, strides[0], strides[1]}},
-                     {"pads", {0, 0, 0, 0}},
-                     {"dilations", {1, 1, 1, 1}},
-                     {"groups", groups}});
+    const auto& runner = NpuOpRunner(
+        "Conv2D", {*input, *filter}, {*output},
+        {{"strides", std::vector<int64_t>({1, 1, strides[0], strides[1]})},
+         {"pads", std::vector<int64_t>({0, 0, 0, 0})},
+         {"dilations", std::vector<int64_t>({1, 1, 1, 1})},
+         {"groups", groups}});
 
     auto stream = dev_ctx.stream();
     runner.Run(stream);

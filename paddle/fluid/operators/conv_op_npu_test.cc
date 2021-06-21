@@ -20,7 +20,6 @@
 
 USE_OP(conv2d);
 USE_OP_DEVICE_KERNEL(conv2d, NPU);
-USE_OP_DEVICE_KERNEL(conv2d, CPU);
 
 namespace paddle {
 namespace operators {
@@ -113,9 +112,9 @@ void TestConv2D(const platform::DeviceContext& ctx, const bool use_cudnn) {
   framework::TensorToVector(*output_tensor, ctx, &output_data);
   printf("output_tensor dims is: %s\n", output_tensor->dims().to_str().c_str());
 
-  // for (size_t i = 0; i < output_numel; ++i) {
-  //   printf("output[%02d] = %5.1f\n", i, output_data[i]);
-  // }
+  for (size_t i = 0; i < output_numel; ++i) {
+    printf("output[%02d] = %5.1f\n", i, output_data[i]);
+  }
 }
 
 TEST(test_conv2d_op, cpu_place) {

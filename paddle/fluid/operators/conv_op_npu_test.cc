@@ -112,7 +112,7 @@ void TestConv2D(const platform::DeviceContext& ctx, const bool use_cudnn) {
   framework::TensorToVector(*output_tensor, ctx, &output_data);
   printf("output_tensor dims is: %s\n", output_tensor->dims().to_str().c_str());
 
-  for (size_t i = 0; i < output_numel; ++i) {
+  for (int i = 0; i < output_numel; ++i) {
     printf("output[%02d] = %5.1f\n", i, static_cast<float>(output_data[i]));
   }
 }

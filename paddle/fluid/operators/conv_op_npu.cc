@@ -83,12 +83,11 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
       dilations_vec[3] = dilations[1];
     }
 
-    const auto& runner =
-        NpuOpRunner("Conv2D", {*input, *filter}, {*output},
-                    {{"strides", std::vector<int64_t>(strides_vec)},
-                     {"pads", std::vector<int64_t>(paddings)},
-                     {"dilations", std::vector<int64_t>(dilations_vec)},
-                     {"groups", groups}});
+    const auto& runner = NpuOpRunner("Conv2D", {*input, *filter}, {*output},
+                                     {{"strides", strides_vec},
+                                      {"pads", paddings},
+                                      {"dilations", dilations_vec},
+                                      {"groups", groups}});
 
     auto stream = dev_ctx.stream();
     runner.Run(stream);

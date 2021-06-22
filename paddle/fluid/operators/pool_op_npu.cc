@@ -75,22 +75,20 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext &ctx) const override {
     auto &dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
-    const Tensor *in_x = context.Input<Tensor>("X");
-    const Tensor *out = context.Input<Tensor>("Out");
-    const Tensor *out_grad =
-        context.Input<Tensor>(framework::GradVarName("Out"));
-    Tensor *in_x_grad = context.Output<Tensor>(framework::GradVarName("X"));
+    const Tensor *in_x = ctx.Input<Tensor>("X");
+    const Tensor *out = ctx.Input<Tensor>("Out");
+    const Tensor *out_grad = ctx.Input<Tensor>(framework::GradVarName("Out"));
+    Tensor *in_x_grad = ctx.Output<Tensor>(framework::GradVarName("X"));
 
-    std::string pooling_type = context.Attr<std::string>("pooling_type");
-    std::vector<int> ksize = context.Attr<std::vector<int>>("ksize");
-    std::vector<int> strides = context.Attr<std::vector<int>>("strides");
-    std::vector<int> paddings = context.Attr<std::vector<int>>("paddings");
-    bool exclusive = context.Attr<bool>("exclusive");
-    bool adaptive = context.Attr<bool>("adaptive");
-    std::string data_format = context.Attr<std::string>("data_format");
-    bool global_pooling = context.Attr<bool>("global_pooling");
-    std::string padding_algorithm =
-        context.Attr<std::string>("padding_algorithm");
+    std::string pooling_type = ctx.Attr<std::string>("pooling_type");
+    std::vector<int> ksize = ctx.Attr<std::vector<int>>("ksize");
+    std::vector<int> strides = ctx.Attr<std::vector<int>>("strides");
+    std::vector<int> paddings = ctx.Attr<std::vector<int>>("paddings");
+    bool exclusive = ctx.Attr<bool>("exclusive");
+    bool adaptive = ctx.Attr<bool>("adaptive");
+    std::string data_format = ctx.Attr<std::string>("data_format");
+    bool global_pooling = ctx.Attr<bool>("global_pooling");
+    std::string padding_algorithm = ctx.Attr<std::string>("padding_algorithm");
 
     const bool channel_last = data_format == "NHWC";
 

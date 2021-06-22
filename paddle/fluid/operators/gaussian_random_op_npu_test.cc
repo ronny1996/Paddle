@@ -53,8 +53,8 @@ void TestGaussianRandomOp(const platform::DeviceContext& ctx) {
   auto after_run_str = op->DebugStringEx(&scope);
   LOG(INFO) << after_run_str;
 
-  size_t out_tensor_numel =
-      static_cast<size_t>(framework::product(out_tensor->dims()));
+  int out_tensor_numel =
+      static_cast<int>(framework::product(out_tensor->dims()));
   // get output
   std::vector<T> out_tensor_data;
   framework::TensorToVector(*out_tensor, ctx, &out_tensor_data);

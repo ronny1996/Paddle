@@ -89,17 +89,17 @@ class NPUBatchNormOpKernel : public framework::OpKernel<T> {
       this_factor_tensor.mutable_data<float>(framework::make_ddim({1}),
                                              ctx.GetPlace());
       framework::TensorFromVector<float>({static_cast<float>(1. - momentum)},
-                                         &this_factor_tensor);
+                                         dev_ctx, &this_factor_tensor);
       framework::Tensor momentum_tensor;
-      momentum_tensor.mutable_data<float>(framework::make_ddim({1}),
+      momentum_tensor.mutable_data<float>(framework::make_ddim({1}), dev_ctx,
                                           ctx.GetPlace());
       framework::TensorFromVector<float>({static_cast<float>(momentum)},
-                                         &momentum_tensor);
+                                         dev_ctx, &momentum_tensor);
       framework::Tensor ones_tensor;
       ones_tensor.mutable_data<float>(mean_out->dims(), ctx.GetPlace());
       framework::TensorFromVector<float>(
           std::vector<float>(framework::product(mean_out->dims()), 1.0f),
-          &ones_tensor);
+          dev_ctx, &ones_tensor);
 
       const auto &runner1 = NpuOpRunner("AddMatMatElements",
                                         {*mean_out, *saved_mean, ones_tensor,

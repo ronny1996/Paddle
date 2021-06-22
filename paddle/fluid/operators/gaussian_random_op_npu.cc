@@ -25,6 +25,7 @@ template <typename T>
 class NPUGaussianRandomKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
+    auto& dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
     auto* out = ctx.Output<framework::Tensor>("Out");
     framework::Tensor out_shape;
     auto shape = GetShape(ctx);
@@ -34,7 +35,7 @@ class NPUGaussianRandomKernel : public framework::OpKernel<T> {
                                 out->place());
 
     std::vector<int> out_shape_vec = framework::vectorize<int>(out->dims());
-    framework::TensorFromVector<int>(out_shape_vec, &out_shape);
+    framework::TensorFromVector<int>(out_shape_vec, dev_ctx, &out_shape);
 
     auto seed = ctx.Attr<int>("seed");
 

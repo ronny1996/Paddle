@@ -48,9 +48,9 @@ void TestConv2D(const platform::DeviceContext& ctx, const bool use_cudnn) {
   desc.SetType("pool2d");
   desc.SetInput("X", {"X"});
   desc.SetOutput("Out", {"Out"});
-  desc.SetAttr("pooling_type", "max");
+  desc.SetAttr("pooling_type", std::string("max"));
   desc.SetAttr("global_pooling", false);
-  desc.SetAttr("padding_algorithm", "VALID");
+  desc.SetAttr("padding_algorithm", std::string("VALID"));
   desc.SetAttr("ksize", std::vector<int>({2, 2}));
   desc.SetAttr("strides", std::vector<int>({2, 2}));
   desc.SetAttr("paddings", std::vector<int>({0, 0}));

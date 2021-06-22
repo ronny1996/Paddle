@@ -11,11 +11,11 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
+#include "paddle/fluid/operators/pool_op.h"
 #include "paddle/fluid/framework/fleet/ascend_wrapper.h"
 #include "paddle/fluid/framework/generator.h"
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
-#include "paddle/fluid/operators/batch_norm_op.h"
 #include "paddle/fluid/operators/fill_constant_op.h"
 
 #include "paddle/fluid/operators/npu_op_runner.h"
@@ -29,23 +29,22 @@ class NPUPoolOpKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext &ctx) const override {
     auto &dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
-    const Tensor *in_x = context.Input<Tensor>("X");
-    Tensor *out = context.Output<Tensor>("Out");
+    const Tensor *in_x = ctx.Input<Tensor>("X");
+    Tensor *out = ctx.Output<Tensor>("Out");
+    out->mutable_data<T>(ctx.GetPlace());
 
-    std::string pooling_type = context.Attr<std::string>("pooling_type");
-    std::vector<int> ksize = context.Attr<std::vector<int>>("ksize");
-    std::vector<int> strides = context.Attr<std::vector<int>>("strides");
-    std::vector<int> paddings = context.Attr<std::vector<int>>("paddings");
-    std::string data_format = context.Attr<std::string>("data_format");
-    bool exclusive = context.Attr<bool>("exclusive");
-    bool adaptive = context.Attr<bool>("adaptive");
-    bool global_pooling = context.Attr<bool>("global_pooling");
-    std::string padding_algorithm =
-        context.Attr<std::string>("padding_algorithm");
+    std::string pooling_type = ctx.Attr<std::string>("pooling_type");
+    std::vector<int> ksize = ctx.Attr<std::vector<int>>("ksize");
+    std::vector<int> strides = ctx.Attr<std::vector<int>>("strides");
+    std::vector<int> paddings = ctx.Attr<std::vector<int>>("paddings");
+    std::string data_format = ctx.Attr<std::string>("data_format");
+    bool exclusive = ctx.Attr<bool>("exclusive");
+    bool adaptive = ctx.Attr<bool>("adaptive");
+    bool global_pooling = ctx.Attr<bool>("global_pooling");
+    std::string padding_algorithm = ctx.Attr<std::string>("padding_algorithm");
 
     const bool channel_last = data_format == "NHWC";
 
-    // update paddings
     auto in_x_dims = in_x->dims();
     framework::DDim data_dims;
     if (channel_last) {
@@ -57,21 +56,16 @@ class NPUPoolOpKernel : public framework::OpKernel<T> {
     UpdatePadding(&paddings, global_pooling, adaptive, padding_algorithm,
                   data_dims, strides, ksize);
 
-    if (data_dims.size() * 2 == static_cast<int>(paddings.size())) {
-      for (int i = 0; i < data_dims.size(); ++i) {
-        paddings.erase(paddings.begin() + i + 1);
-      }
-    }
-
     int64_t pooling_mode = (pooling_type == "max" ? 0 : 1);
-    const auto &runner = NpuOpRunner("Pooling", {*in_x}, {*out},
-                                     {{"mode", pooling_mode},
-                                      {"global_pooling", global_pooling},
-                                      {"window", ksize},
-                                      {"stride", strides},
-                                      {"pad", paddings},
-                                      {"dilation", dilations_vec},
-                                      {"ceil_mode", static_cast<int64_t>(0)}});
+    const auto &runner =
+        NpuOpRunner("Pooling", {*in_x}, {*out},
+                    {{"mode", pooling_mode},
+                     {"global_pooling", global_pooling},
+                     {"window", ksize},
+                     {"stride", strides},
+                     {"pad", paddings},
+                     {"dilation", std::vector<int64_t>({1, 1, 1, 1})},
+                     {"ceil_mode", static_cast<int64_t>(0)}});
     auto stream = dev_ctx.stream();
     runner.Run(stream);
   }

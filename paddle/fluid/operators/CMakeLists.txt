@@ -198,7 +198,7 @@ if(WITH_ASCEND_CL)
 cc_test(gelu_op_npu_test SRCS gelu_op_npu_test.cc DEPS op_registry gelu_op scope device_context enforce executor)
 cc_test(gaussian_random_op_npu_test SRCS gaussian_random_op_npu_test.cc DEPS gaussian_random_op op_registry scope device_context enforce executor generator)
 cc_test(conv_op_npu_test SRCS conv_op_npu_test.cc DEPS conv_op op_registry scope device_context enforce executor generator blas math_function im2col vol2col)
-cc_test(pool_op_npu_test SRCS pool_op_npu_test.cc DEPS pool_op op_registry scope device_context enforce executor generator blas math_function im2col vol2col)
+cc_test(pool_op_npu_test SRCS pool_op_npu_test.cc DEPS pool_op op_registry scope device_context enforce executor generator blas math_function im2col vol2col pooling)
 cc_test(batch_norm_op_npu_test SRCS batch_norm_op_npu_test.cc DEPS batch_norm_op op_registry scope device_context enforce executor generator blas math_function im2col vol2col)
 
 endif()

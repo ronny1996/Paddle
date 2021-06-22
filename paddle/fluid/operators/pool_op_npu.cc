@@ -55,8 +55,7 @@ class NPUPoolOpKernel : public framework::OpKernel<T> {
 
     UpdatePadding(&paddings, global_pooling, adaptive, padding_algorithm,
                   data_dims, strides, ksize);
-
-    int64_t pooling_mode = (pooling_type == "max" ? 0 : 1);
+    int64_t pooling_mode = (pooling_type == "max" ? 0 : 1);  // 0: max, 1: avg
     const auto &runner =
         NpuOpRunner("Pooling", {*in_x}, {*out},
                     {{"mode", pooling_mode},
@@ -76,6 +75,61 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext &ctx) const override {
     auto &dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
+    const Tensor *in_x = context.Input<Tensor>("X");
+    const Tensor *out = context.Input<Tensor>("Out");
+    const Tensor *out_grad =
+        context.Input<Tensor>(framework::GradVarName("Out"));
+    Tensor *in_x_grad = context.Output<Tensor>(framework::GradVarName("X"));
+
+    std::string pooling_type = context.Attr<std::string>("pooling_type");
+    std::vector<int> ksize = context.Attr<std::vector<int>>("ksize");
+    std::vector<int> strides = context.Attr<std::vector<int>>("strides");
+    std::vector<int> paddings = context.Attr<std::vector<int>>("paddings");
+    bool exclusive = context.Attr<bool>("exclusive");
+    bool adaptive = context.Attr<bool>("adaptive");
+    std::string data_format = context.Attr<std::string>("data_format");
+    bool global_pooling = context.Attr<bool>("global_pooling");
+    std::string padding_algorithm =
+        context.Attr<std::string>("padding_algorithm");
+
+    const bool channel_last = data_format == "NHWC";
+
+    // update paddings
+    auto in_x_dims = in_x->dims();
+    framework::DDim data_dims;
+    if (channel_last) {
+      data_dims = framework::slice_ddim(in_x_dims, 1, in_x_dims.size() - 1);
+    } else {
+      data_dims = framework::slice_ddim(in_x_dims, 2, in_x_dims.size());
+    }
+    UpdatePadding(&paddings, global_pooling, adaptive, padding_algorithm,
+                  data_dims, strides, ksize);
+
+    auto stream = dev_ctx.stream();
+    if (pooling_type == "max") {
+      Tensor argmax_tensor;
+      const auto &runner = NpuOpRunner(
+          "MaxPoolWithArgmaxV2", {*in_x}, {*out, argmax_tensor},
+          {{"ksize", ksize}, {"strides", strides}, {"pads", paddings}});
+      runner.Run(stream);
+      const auto &runner = NpuOpRunner(
+          "MaxPoolGradWithArgmaxV2", {*in_x, *out_grad, argmax_tensor},
+          {*in_x_grad},
+          {{"ksize", ksize}, {"strides", strides}, {"pads", paddings}});
+      runner.Run(stream);
+    } else if (pooling_type == "avg") {
+      Tensor input_shape_tensor;
+      const auto &runner =
+          NpuOpRunner("AvgPoolV2Grad", {input_shape_tensor, *out_grad},
+                      {*in_x_grad}, {{"ksize", ksize},
+                                     {"strides", strides},
+                                     {"pads", paddings},
+                                     {"global_pooling", global_pooling},
+                                     {"ceil_mode", false},
+                                     {"exclusive", exclusive},
+                                     {"data_format", data_format}});
+      runner.Run(stream);
+    }
   }
 };
 }  // namespace operators

@@ -91,7 +91,7 @@ class NPUBatchNormOpKernel : public framework::OpKernel<T> {
       framework::TensorFromVector<float>({static_cast<float>(1. - momentum)},
                                          dev_ctx, &this_factor_tensor);
       framework::Tensor momentum_tensor;
-      momentum_tensor.mutable_data<float>(framework::make_ddim({1}), dev_ctx,
+      momentum_tensor.mutable_data<float>(framework::make_ddim({1}),
                                           ctx.GetPlace());
       framework::TensorFromVector<float>({static_cast<float>(momentum)},
                                          dev_ctx, &momentum_tensor);

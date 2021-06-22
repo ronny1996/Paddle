@@ -1,0 +1,94 @@
+/* Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. */
+#include "paddle/fluid/framework/fleet/ascend_wrapper.h"
+#include "paddle/fluid/framework/generator.h"
+#include "paddle/fluid/framework/op_registry.h"
+#include "paddle/fluid/framework/operator.h"
+#include "paddle/fluid/operators/batch_norm_op.h"
+#include "paddle/fluid/operators/fill_constant_op.h"
+
+#include "paddle/fluid/operators/npu_op_runner.h"
+#include "paddle/fluid/platform/npu_helper.h"
+
+namespace paddle {
+namespace operators {
+
+template <typename T>
+class NPUPoolOpKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext &ctx) const override {
+    auto &dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
+    const Tensor *in_x = context.Input<Tensor>("X");
+    Tensor *out = context.Output<Tensor>("Out");
+
+    std::string pooling_type = context.Attr<std::string>("pooling_type");
+    std::vector<int> ksize = context.Attr<std::vector<int>>("ksize");
+    std::vector<int> strides = context.Attr<std::vector<int>>("strides");
+    std::vector<int> paddings = context.Attr<std::vector<int>>("paddings");
+    std::string data_format = context.Attr<std::string>("data_format");
+    bool exclusive = context.Attr<bool>("exclusive");
+    bool adaptive = context.Attr<bool>("adaptive");
+    bool global_pooling = context.Attr<bool>("global_pooling");
+    std::string padding_algorithm =
+        context.Attr<std::string>("padding_algorithm");
+
+    const bool channel_last = data_format == "NHWC";
+
+    // update paddings
+    auto in_x_dims = in_x->dims();
+    framework::DDim data_dims;
+    if (channel_last) {
+      data_dims = framework::slice_ddim(in_x_dims, 1, in_x_dims.size() - 1);
+    } else {
+      data_dims = framework::slice_ddim(in_x_dims, 2, in_x_dims.size());
+    }
+
+    UpdatePadding(&paddings, global_pooling, adaptive, padding_algorithm,
+                  data_dims, strides, ksize);
+
+    if (data_dims.size() * 2 == static_cast<int>(paddings.size())) {
+      for (int i = 0; i < data_dims.size(); ++i) {
+        paddings.erase(paddings.begin() + i + 1);
+      }
+    }
+
+    int64_t pooling_mode = (pooling_type == "max" ? 0 : 1);
+    const auto &runner = NpuOpRunner("Pooling", {*in_x}, {*out},
+                                     {{"mode", pooling_mode},
+                                      {"global_pooling", global_pooling},
+                                      {"window", ksize},
+                                      {"stride", strides},
+                                      {"pad", paddings},
+                                      {"dilation", dilations_vec},
+                                      {"ceil_mode", static_cast<int64_t>(0)}});
+    auto stream = dev_ctx.stream();
+    runner.Run(stream);
+  }
+};
+
+template <typename T>
+class NPUPoolGradOpKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext &ctx) const override {
+    auto &dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
+  }
+};
+}  // namespace operators
+}  // namespace paddle
+
+REGISTER_OP_NPU_KERNEL(pool2d, paddle::operators::NPUPoolOpKernel<float>,
+                       paddle::operators::NPUPoolOpKernel<double>);
+REGISTER_OP_NPU_KERNEL(pool2d_grad,
+                       paddle::operators::NPUPoolGradOpKernel<float>,
+                       paddle::operators::NPUPoolGradOpKernel<double>);

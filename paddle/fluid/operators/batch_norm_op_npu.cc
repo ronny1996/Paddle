@@ -103,12 +103,12 @@ class NPUBatchNormOpKernel : public framework::OpKernel<T> {
 
       const auto &runner1 = NpuOpRunner("AddMatMatElements",
                                         {*mean_out, *saved_mean, ones_tensor,
-                                         this_factor_tensor, momentum_tensor},
+                                         momentum_tensor, this_factor_tensor},
                                         {*mean_out}, {});
       runner1.Run(stream);
       const auto &runner2 = NpuOpRunner(
           "AddMatMatElements", {*variance_out, *saved_variance, ones_tensor,
-                                this_factor_tensor, momentum_tensor},
+                                momentum_tensor, this_factor_tensor},
           {*variance_out}, {});
       runner2.Run(stream);
     }

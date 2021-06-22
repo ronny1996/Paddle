@@ -1568,6 +1568,11 @@ void BindImperative(py::module *m_ptr) {
               self.SetExpectedPlace(*p);
               VLOG(4) << "Tracer(" << &self << ")"
                       << " set expected place " << *p;
+            } else if (py::isinstance<platform::NPUPlace>(obj)) {
+              auto p = obj.cast<platform::NPUPlace *>();
+              self.SetExpectedPlace(*p);
+              VLOG(4) << "Tracer(" << &self << ")"
+                      << " set expected place " << *p;
             } else if (py::isinstance<platform::CPUPlace>(obj)) {
               auto p = obj.cast<platform::CPUPlace *>();
               self.SetExpectedPlace(*p);

@@ -143,9 +143,10 @@ class NPUBatchNormGradOpKernel : public framework::OpKernel<T> {
 
     const auto &runner = NpuOpRunner(
         "BatchNormGrad", {*y_grad, *x, *scale, *saved_mean, *saved_variance},
-        {*x_grad, *scale_grad, *bias_grad}, {{"epsilon", epsilon},
-                                             {"is_training", true},
-                                             {"data_format", data_layout}});
+        {*x_grad, *scale_grad, *bias_grad, *saved_mean, *saved_variance},
+        {{"epsilon", epsilon},
+         {"is_training", true},
+         {"data_format", data_layout}});
     auto stream = dev_ctx.stream();
     runner.Run(stream);
   }

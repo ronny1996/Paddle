@@ -26,9 +26,11 @@ using Tensor = framework::Tensor;
 template <typename T>
 void NpuBroadcastTo(const framework::ExecutionContext& ctx, const Tensor* dst,
                     const Tensor* src, int axis, Tensor* transformed_src) {
+  // dst.dims().size() > src.dims().size();
   framework::DDim dst_dims = dst->dims();
   framework::DDim src_dims = src->dims();
   framework::DDim trim_src_dims = trim_trailing_singular_dims(src_dims);
+  axis = (axis == -1 ? dst_dims.size() - src_dims.size() : axis);
   auto tile_axis = axis + trim_src_dims.size();
 
   auto stream =
@@ -213,6 +215,71 @@ class ElementwiseAddGradNPUKernel : public framework::OpKernel<T> {
   }
 };
 
+template <typename T>
+class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext& ctx) const override {
+    auto* x = ctx.Input<framework::LoDTensor>("X");
+    auto* y = ctx.Input<framework::LoDTensor>("Y");
+    auto* dout = ctx.Input<Tensor>(framework::GradVarName("Out"));
+    auto* dx = ctx.Output<Tensor>(framework::GradVarName("X"));
+    auto* dy = ctx.Output<Tensor>(framework::GradVarName("Y"));
+    int axis = ctx.Attr<int>("axis");
+    axis = (axis == -1? std::abs(x->dims().size() - y->dims().size()), axis);
+
+    auto stream =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>()
+            .stream();
+
+    if (dx) {
+      dx->mutable_data<T>(ctx.GetPlace());
+      std::vector<int64_t> reduce_axes;
+      if (dx.dims() != dout.dims()) {
+        framework::DDim trim_dx_dims = trim_trailing_singular_dims(dx.dims());
+        for (int64_t ax = 0; ax < dout.dims().size(); ax++) {
+          if (ax < axis && ax > trim_dx_dims.size() + axis) {
+            reduce_axes.push_back(ax);
+          }
+        }
+        // dont need care the axis with dim 1
+        if (!reduce_axes.empty()) {
+          const auto& runner =
+              NpuOpRunner("ReduceSumD", {*dout}, {*dx},
+                          {{"axes", reduce_axes}, {"keep_dims", false}});
+          runner.Run(stream);
+        }
+      } else {
+        framework::TensorCopy(
+            *dout, ctx.GetPlace(),
+            ctx.template device_context<platform::DeviceContext>(), dx);
+      }
+    }
+    if (dy) {
+      dy->mutable_data<T>(ctx.GetPlace());
+      std::vector<int64_t> reduce_axes;
+      if (dy.dims() != dout.dims()) {
+        framework::DDim trim_dy_dims = trim_trailing_singular_dims(dy.dims());
+        for (int64_t ax = 0; ax < dout.dims().size(); ax++) {
+          if (ax < axis && ax > trim_dy_dims.size() + axis) {
+            reduce_axes.push_back(ax);
+          }
+        }
+        // dont need care the axis with dim 1
+        if (!reduce_axes.empty()) {
+          const auto& runner =
+              NpuOpRunner("ReduceSumD", {*dout}, {*dy},
+                          {{"axes", reduce_axes}, {"keep_dims", false}});
+          runner.Run(stream);
+        }
+      } else {
+        framework::TensorCopy(
+            *dout, ctx.GetPlace(),
+            ctx.template device_context<platform::DeviceContext>(), dy);
+      }
+    }
+  }
+};
+
 }  // namespace operators
 }  // namespace paddle
 
@@ -223,5 +290,5 @@ REGISTER_OP_NPU_KERNEL(elementwise_add, ops::ElementwiseAddNPUKernel<float>,
                        ops::ElementwiseAddNPUKernel<plat::float16>);
 
 REGISTER_OP_NPU_KERNEL(elementwise_add_grad,
-                       ops::ElementwiseAddGradNPUKernel<float>,
-                       ops::ElementwiseAddGradNPUKernel<plat::float16>);
+                       ops::ElementwiseAddGradWithAxisNPUKernel<float>,
+                       ops::ElementwiseAddGradWithAxisNPUKernel<plat::float16>);

@@ -69,16 +69,16 @@ class ElementwiseAddNPUKernel : public framework::OpKernel<T> {
     if (x->dims() != y->dims()) {
       if (x->dims().size() >= y->dims().size()) {
         transformed_y.mutable_data<T>(x->dims(), ctx.GetPlace());
-        NpuBroadcastTo<T>(ctx, x, y, axis, transformed_y);
+        NpuBroadcastTo<T>(ctx, x, y, axis, &transformed_y);
         transformed_x.ShareDataWith(*x);
       } else {
         transformed_x.mutable_data<T>(y->dims(), ctx.GetPlace());
-        NpuBroadcastTo<T>(ctx, y, x, axis, transformed_x);
+        NpuBroadcastTo<T>(ctx, y, x, axis, &transformed_x);
         transformed_y.ShareDataWith(*y);
       }
     }
     const auto& runner =
-        NpuOpRunner("Add", {*transformed_x, *transformed_y}, {*out}, {});
+        NpuOpRunner("Add", {transformed_x, transformed_y}, {*out}, {});
     auto stream =
         ctx.template device_context<paddle::platform::NPUDeviceContext>()
             .stream();

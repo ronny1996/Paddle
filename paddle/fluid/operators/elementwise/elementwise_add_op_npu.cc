@@ -24,8 +24,8 @@ namespace operators {
 using Tensor = framework::Tensor;
 
 template <typename T>
-void NpuBroadcastTo(const framework::ExecutionContext& ctx, Tensor* dst,
-                    Tensor* src, int axis, Tensor* transformed_src) {
+void NpuBroadcastTo(const framework::ExecutionContext& ctx, const Tensor* dst,
+                    const Tensor* src, int axis, Tensor* transformed_src) {
   auto dst_dims = dst->dims();
   auto src_dims = trim_trailing_singular_dims(src->dims());
   auto tile_axis = axis + src_dims.size();

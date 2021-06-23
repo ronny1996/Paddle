@@ -65,6 +65,7 @@ class ElementwiseAddNPUKernel : public framework::OpKernel<T> {
     out->mutable_data<T>(ctx.GetPlace());
 
     Tensor transformed_x, transformed_y;
+    int axis = ctx.Attr<int>("axis");
     if (x->dims() != y->dims()) {
       if (x->dims().size() >= y->dims().size()) {
         transformed_x.ShareDataWith(*x);

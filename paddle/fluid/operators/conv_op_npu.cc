@@ -164,34 +164,30 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
     }
 
     if (filter_grad) {
-      framework::Tensor filter_shape_tensor;
       std::vector<int> filter_shape_vec =
           framework::vectorize<int>(filter->dims());
-      framework::TensorFromVector<int>(filter_shape_vec, dev_ctx,
-                                       &filter_shape_tensor);
-      const auto& runner = NpuOpRunner(
-          "Conv2DBackpropFilter", {*input, filter_shape_tensor, *output_grad},
-          {*filter_grad}, {{"strides", strides_vec},
-                           {"pads", paddings},
-                           {"dilations", dilations_vec},
-                           {"groups", groups},
-                           {"data_format", data_format_str}});
+      const auto& runner =
+          NpuOpRunner("Conv2DBackpropFilterD", {*input, *output_grad},
+                      {*filter_grad}, {{"filter_size", filter_shape_vec},
+                                       {"strides", strides_vec},
+                                       {"pads", paddings},
+                                       {"dilations", dilations_vec},
+                                       {"groups", groups},
+                                       {"data_format", data_format_str}});
       auto stream = dev_ctx.stream();
       runner.Run(stream);
     }
     if (input_grad) {
-      framework::Tensor input_shape_tensor;
       std::vector<int> input_shape_vec =
           framework::vectorize<int>(input->dims());
-      framework::TensorFromVector<int>(input_shape_vec, dev_ctx,
-                                       &input_shape_tensor);
-      const auto& runner = NpuOpRunner(
-          "Conv2DBackpropInput", {input_shape_tensor, *filter, *output_grad},
-          {*input_grad}, {{"strides", strides_vec},
-                          {"pads", paddings},
-                          {"dilations", dilations_vec},
-                          {"groups", groups},
-                          {"data_format", data_format_str}});
+      const auto& runner =
+          NpuOpRunner("Conv2DBackpropInputD", {*filter, *output_grad},
+                      {*input_grad}, {{"input_size", input_shape_vec},
+                                      {"strides", strides_vec},
+                                      {"pads", paddings},
+                                      {"dilations", dilations_vec},
+                                      {"groups", groups},
+                                      {"data_format", data_format_str}});
       auto stream = dev_ctx.stream();
       runner.Run(stream);
     }

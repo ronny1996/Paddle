@@ -143,7 +143,9 @@ class NPUBatchNormGradOpKernel : public framework::OpKernel<T> {
 
     const auto &runner = NpuOpRunner(
         "BatchNormGrad", {*y_grad, *x, *scale, *saved_mean, *saved_variance},
-        {*x_grad, *scale_grad, *bias_grad, *saved_mean, *saved_variance},
+        {*x_grad, *scale_grad, *bias_grad, *saved_mean,
+         *saved_variance},  // segment fault if no reserve_space_3 and
+                            // reserve_space_4
         {{"epsilon", epsilon},
          {"is_training", true},
          {"data_format", data_layout}});

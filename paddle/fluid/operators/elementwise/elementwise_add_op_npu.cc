@@ -24,6 +24,38 @@ namespace operators {
 using Tensor = framework::Tensor;
 
 template <typename T>
+void NpuBroadcastTo(const framework::ExecutionContext& ctx, Tensor* dst,
+                    Tensor* src, int axis, Tensor* transformed_src) {
+  auto dst_dims = dst->dims();
+  auto src_dims = trim_trailing_singular_dims(src->dims());
+  auto tile_axis = axis + src_dims.size();
+
+  auto stream =
+      ctx.template device_context<paddle::platform::NPUDeviceContext>()
+          .stream();
+
+  auto expand_to_dims = framework::slice_ddim(dst_dims, 0, tile_axis);
+  auto expand_to_dims_vec = framework::vectorize<int64_t>(expand_to_dims);
+  Tensor tmp_tensor;
+  tmp_tensor.mutable_data<T>(expand_to_dims, ctx.GetPlace());
+  const auto& expand_runner = NpuOpRunner("ExpandD", {*src}, {tmp_tensor},
+                                          {{"shape", expand_to_dims_vec}});
+  expand_runner.Run(stream);
+
+  Tensor tmp_tensor_2;
+  auto tiles_num = framework::product(
+      framework::slice_ddim(dst_dims, tile_axis, dst_dims.size()));
+  tmp_tensor_2.mutable_data<T>(dst_dims, ctx.GetPlace());
+  const auto& tile_runner =
+      NpuOpRunner("TileWithAxis", {tmp_tensor}, {tmp_tensor_2},
+                  {{"axis", static_cast<int64_t>(tile_axis)},
+                   {"tiles", static_cast<int64_t>(tiles_num)}});
+  tile_runner.Run(stream);
+
+  framework::TensorCopy(tmp_tensor_2, *transformed_src);
+}
+
+template <typename T>
 class ElementwiseAddNPUKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
@@ -32,7 +64,20 @@ class ElementwiseAddNPUKernel : public framework::OpKernel<T> {
     auto* out = ctx.Output<framework::LoDTensor>("Out");
     out->mutable_data<T>(ctx.GetPlace());
 
-    const auto& runner = NpuOpRunner("Add", {*x, *y}, {*out}, {});
+    Tensor transformed_x, transformed_y;
+    if (x->dims() != y->dims()) {
+      if (x->dims().size() >= y->dims().size()) {
+        transformed_x.ShareDataWith(*x);
+        transformed_y.mutable_data<T>(x->dims(), ctx.GetPlace());
+        NpuBroadcastTo<T>(ctx, transformed_x, y, axis, transformed_y);
+      } else {
+        transformed_y.ShareDataWith(*y);
+        transformed_x.mutable_data<T>(y->dims(), ctx.GetPlace());
+        NpuBroadcastTo<T>(ctx, transformed_y, x, axis, transformed_x);
+      }
+    }
+    const auto& runner =
+        NpuOpRunner("Add", {*transformed_x, *transformed_y}, {*out}, {});
     auto stream =
         ctx.template device_context<paddle::platform::NPUDeviceContext>()
             .stream();

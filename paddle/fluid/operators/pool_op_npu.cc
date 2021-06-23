@@ -106,15 +106,15 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
     auto stream = dev_ctx.stream();
     if (pooling_type == "max") {
       Tensor argmax_tensor;
-      const auto &runner = NpuOpRunner(
+      const auto &runner1 = NpuOpRunner(
           "MaxPoolWithArgmaxV2", {*in_x}, {*out, argmax_tensor},
           {{"ksize", ksize}, {"strides", strides}, {"pads", paddings}});
-      runner.Run(stream);
-      const auto &runner = NpuOpRunner(
+      runner1.Run(stream);
+      const auto &runner2 = NpuOpRunner(
           "MaxPoolGradWithArgmaxV2", {*in_x, *out_grad, argmax_tensor},
           {*in_x_grad},
           {{"ksize", ksize}, {"strides", strides}, {"pads", paddings}});
-      runner.Run(stream);
+      runner2.Run(stream);
     } else if (pooling_type == "avg") {
       Tensor input_shape_tensor;
       const auto &runner =

@@ -26,33 +26,45 @@ using Tensor = framework::Tensor;
 template <typename T>
 void NpuBroadcastTo(const framework::ExecutionContext& ctx, const Tensor* dst,
                     const Tensor* src, int axis, Tensor* transformed_src) {
-  auto dst_dims = dst->dims();
-  auto src_dims = trim_trailing_singular_dims(src->dims());
-  auto tile_axis = axis + src_dims.size();
+  framework::DDim dst_dims = dst->dims();
+  framework::DDim src_dims = src->dims();
+  framework::DDim trim_src_dims = trim_trailing_singular_dims(src_dims);
+  auto tile_axis = axis + trim_src_dims.size();
 
   auto stream =
       ctx.template device_context<paddle::platform::NPUDeviceContext>()
           .stream();
 
   auto expand_to_dims = framework::slice_ddim(dst_dims, 0, tile_axis);
-  auto expand_to_dims_vec = framework::vectorize<int64_t>(expand_to_dims);
+  auto expand_to_dims_vec = framework::vectorize<int>(expand_to_dims);
+
+  Tensor tmp_src;
+  tmp_src.ShareDataWith(*src);
+  tmp_src.Resize(trim_src_dims);
+
   Tensor tmp_tensor;
   tmp_tensor.mutable_data<T>(expand_to_dims, ctx.GetPlace());
-  const auto& expand_runner = NpuOpRunner("ExpandD", {*src}, {tmp_tensor},
+  const auto& expand_runner = NpuOpRunner("ExpandD", {tmp_src}, {tmp_tensor},
                                           {{"shape", expand_to_dims_vec}});
   expand_runner.Run(stream);
 
   Tensor tmp_tensor_2;
-  auto tiles_num = framework::product(
-      framework::slice_ddim(dst_dims, tile_axis, dst_dims.size()));
-  tmp_tensor_2.mutable_data<T>(dst_dims, ctx.GetPlace());
-  const auto& tile_runner =
-      NpuOpRunner("TileWithAxis", {tmp_tensor}, {tmp_tensor_2},
-                  {{"axis", static_cast<int64_t>(tile_axis)},
-                   {"tiles", static_cast<int64_t>(tiles_num)}});
-  tile_runner.Run(stream);
-
+  if (tile_axis < dst_dims.size()) {
+    expand_to_dims_vec.push_back(1);
+    tmp_tensor.Resize(framework::make_ddim(expand_to_dims_vec));
+    auto tiles_num = framework::product(
+        framework::slice_ddim(dst_dims, tile_axis, dst_dims.size()));
+    tmp_tensor_2.mutable_data<T>(dst_dims, ctx.GetPlace());
+    const auto& tile_runner =
+        NpuOpRunner("TileWithAxis", {tmp_tensor}, {tmp_tensor_2},
+                    {{"axis", static_cast<int64_t>(tile_axis)},
+                     {"tiles", static_cast<int64_t>(tiles_num)}});
+    tile_runner.Run(stream);
+  } else {
+    tmp_tensor_2.ShareDataWith(tmp_tensor);
+  }
   framework::TensorCopy(tmp_tensor_2, ctx.GetPlace(), transformed_src);
+  std::cout << src->dims() << '\t' << tmp_src.dims() << std::endl;
 }
 
 template <typename T>
@@ -68,13 +80,13 @@ class ElementwiseAddNPUKernel : public framework::OpKernel<T> {
     if (x->dims() != y->dims()) {
       int axis = ctx.Attr<int>("axis");
       if (x->dims().size() >= y->dims().size()) {
+        transformed_x.ShareDataWith(*x);
         transformed_y.mutable_data<T>(x->dims(), ctx.GetPlace());
         NpuBroadcastTo<T>(ctx, x, y, axis, &transformed_y);
-        transformed_x.ShareDataWith(*x);
       } else {
+        transformed_y.ShareDataWith(*y);
         transformed_x.mutable_data<T>(y->dims(), ctx.GetPlace());
         NpuBroadcastTo<T>(ctx, y, x, axis, &transformed_x);
-        transformed_y.ShareDataWith(*y);
       }
     } else {
       transformed_x.ShareDataWith(*x);

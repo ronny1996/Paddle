@@ -52,7 +52,7 @@ void NpuBroadcastTo(const framework::ExecutionContext& ctx, Tensor* dst,
                    {"tiles", static_cast<int64_t>(tiles_num)}});
   tile_runner.Run(stream);
 
-  framework::TensorCopy(tmp_tensor_2, *transformed_src);
+  framework::TensorCopy(tmp_tensor_2, ctx.GetPlace(), *transformed_src);
 }
 
 template <typename T>

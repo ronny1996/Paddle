@@ -66,7 +66,6 @@ void NpuBroadcastTo(const framework::ExecutionContext& ctx, const Tensor* dst,
     tmp_tensor_2.ShareDataWith(tmp_tensor);
   }
   framework::TensorCopy(tmp_tensor_2, ctx.GetPlace(), transformed_src);
-  std::cout << src->dims() << '\t' << tmp_src.dims() << std::endl;
 }
 
 template <typename T>
@@ -237,7 +236,7 @@ class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
       if (dx->dims() != dout->dims()) {
         framework::DDim trim_dx_dims = trim_trailing_singular_dims(dx->dims());
         for (int64_t ax = 0; ax < dout->dims().size(); ax++) {
-          if (ax < axis && ax > trim_dx_dims.size() + axis) {
+          if (ax < axis || ax >= trim_dx_dims.size() + axis) {
             reduce_axes.push_back(ax);
           }
         }
@@ -260,11 +259,11 @@ class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
       if (dy->dims() != dout->dims()) {
         framework::DDim trim_dy_dims = trim_trailing_singular_dims(dy->dims());
         for (int64_t ax = 0; ax < dout->dims().size(); ax++) {
-          if (ax < axis && ax > trim_dy_dims.size() + axis) {
+          if (ax < axis || ax >= trim_dy_dims.size() + axis) {
             reduce_axes.push_back(ax);
           }
         }
-        // dont need care the axis with dim 1
+        // dont care the axis with dim 1
         if (!reduce_axes.empty()) {
           const auto& runner =
               NpuOpRunner("ReduceSumD", {*dout}, {*dy},

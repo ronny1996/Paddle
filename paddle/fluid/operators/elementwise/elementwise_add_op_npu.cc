@@ -225,7 +225,7 @@ class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
     auto* dx = ctx.Output<Tensor>(framework::GradVarName("X"));
     auto* dy = ctx.Output<Tensor>(framework::GradVarName("Y"));
     int axis = ctx.Attr<int>("axis");
-    axis = (axis == -1? std::abs(x->dims().size() - y->dims().size()), axis);
+    axis = (axis == -1 ? std::abs(x->dims().size() - y->dims().size()) : axis);
 
     auto stream =
         ctx.template device_context<paddle::platform::NPUDeviceContext>()
@@ -234,9 +234,9 @@ class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
     if (dx) {
       dx->mutable_data<T>(ctx.GetPlace());
       std::vector<int64_t> reduce_axes;
-      if (dx.dims() != dout.dims()) {
-        framework::DDim trim_dx_dims = trim_trailing_singular_dims(dx.dims());
-        for (int64_t ax = 0; ax < dout.dims().size(); ax++) {
+      if (dx->dims() != dout->dims()) {
+        framework::DDim trim_dx_dims = trim_trailing_singular_dims(dx->dims());
+        for (int64_t ax = 0; ax < dout->dims().size(); ax++) {
           if (ax < axis && ax > trim_dx_dims.size() + axis) {
             reduce_axes.push_back(ax);
           }
@@ -257,9 +257,9 @@ class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
     if (dy) {
       dy->mutable_data<T>(ctx.GetPlace());
       std::vector<int64_t> reduce_axes;
-      if (dy.dims() != dout.dims()) {
-        framework::DDim trim_dy_dims = trim_trailing_singular_dims(dy.dims());
-        for (int64_t ax = 0; ax < dout.dims().size(); ax++) {
+      if (dy->dims() != dout->dims()) {
+        framework::DDim trim_dy_dims = trim_trailing_singular_dims(dy->dims());
+        for (int64_t ax = 0; ax < dout->dims().size(); ax++) {
           if (ax < axis && ax > trim_dy_dims.size() + axis) {
             reduce_axes.push_back(ax);
           }

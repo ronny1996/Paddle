@@ -65,8 +65,8 @@ class ElementwiseAddNPUKernel : public framework::OpKernel<T> {
     out->mutable_data<T>(ctx.GetPlace());
 
     Tensor transformed_x, transformed_y;
-    int axis = ctx.Attr<int>("axis");
     if (x->dims() != y->dims()) {
+      int axis = ctx.Attr<int>("axis");
       if (x->dims().size() >= y->dims().size()) {
         transformed_y.mutable_data<T>(x->dims(), ctx.GetPlace());
         NpuBroadcastTo<T>(ctx, x, y, axis, &transformed_y);
@@ -76,6 +76,9 @@ class ElementwiseAddNPUKernel : public framework::OpKernel<T> {
         NpuBroadcastTo<T>(ctx, y, x, axis, &transformed_x);
         transformed_y.ShareDataWith(*y);
       }
+    } else {
+      transformed_x.ShareDataWith(*x);
+      transformed_y.ShareDataWith(*y);
     }
     const auto& runner =
         NpuOpRunner("Add", {transformed_x, transformed_y}, {*out}, {});

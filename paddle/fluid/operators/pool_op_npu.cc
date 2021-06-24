@@ -80,6 +80,7 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
     const Tensor *out = ctx.Input<Tensor>("Out");
     const Tensor *out_grad = ctx.Input<Tensor>(framework::GradVarName("Out"));
     Tensor *in_x_grad = ctx.Output<Tensor>(framework::GradVarName("X"));
+    in_x_grad->mutable_data<T>(ctx.GetPlace());
 
     std::string pooling_type = ctx.Attr<std::string>("pooling_type");
     std::vector<int> ksize = ctx.Attr<std::vector<int>>("ksize");
@@ -107,6 +108,8 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
     auto stream = dev_ctx.stream();
     if (pooling_type == "max") {
       Tensor argmax_tensor;
+      argmax_tensor.mutable_data<T>(in_x->dims(), ctx.GetPlace());
+
       const auto &runner1 = NpuOpRunner(
           "MaxPoolWithArgmaxV2", {*in_x}, {*out, argmax_tensor},
           {{"ksize", ksize}, {"strides", strides}, {"pads", paddings}});
@@ -118,6 +121,8 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
       runner2.Run(stream);
     } else if (pooling_type == "avg") {
       Tensor input_shape_tensor;
+      input_shape_tensor.mutable_data<T>(in_x->dims(), ctx.GetPlace());
+
       const auto &runner =
           NpuOpRunner("AvgPoolV2Grad", {input_shape_tensor, *out_grad},
                       {*in_x_grad}, {{"ksize", ksize},

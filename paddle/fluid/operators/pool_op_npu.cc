@@ -97,41 +97,47 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
     // update paddings
     auto in_x_dims = in_x->dims();
     framework::DDim data_dims;
+    std::vector<int> ksize_vec(4, 1);
+    std::vector<int> strides_vec(4, 1);
     if (channel_last) {
       data_dims = framework::slice_ddim(in_x_dims, 1, in_x_dims.size() - 1);
+      ksize_vec[1] = ksize[0];
+      ksize_vec[2] = ksize[1];
+      strides_vec[1] = strides[0];
+      strides_vec[2] = strides[1];
     } else {
       data_dims = framework::slice_ddim(in_x_dims, 2, in_x_dims.size());
+      ksize_vec[2] = ksize[0];
+      ksize_vec[3] = ksize[1];
+      strides_vec[2] = strides[0];
+      strides_vec[3] = strides[1];
     }
     UpdatePadding(&paddings, global_pooling, adaptive, padding_algorithm,
                   data_dims, strides, ksize);
 
     auto stream = dev_ctx.stream();
     if (pooling_type == "max") {
-      Tensor argmax_tensor;
-      argmax_tensor.mutable_data<T>(in_x->dims(), ctx.GetPlace());
-
-      const auto &runner1 = NpuOpRunner(
-          "MaxPoolWithArgmaxV2", {*in_x}, {*out, argmax_tensor},
-          {{"ksize", ksize}, {"strides", strides}, {"pads", paddings}});
-      runner1.Run(stream);
-      const auto &runner2 = NpuOpRunner(
-          "MaxPoolGradWithArgmaxV2", {*in_x, *out_grad, argmax_tensor},
-          {*in_x_grad},
-          {{"ksize", ksize}, {"strides", strides}, {"pads", paddings}});
-      runner2.Run(stream);
-    } else if (pooling_type == "avg") {
-      Tensor input_shape_tensor;
-      input_shape_tensor.mutable_data<T>(in_x->dims(), ctx.GetPlace());
-
       const auto &runner =
-          NpuOpRunner("AvgPoolV2Grad", {input_shape_tensor, *out_grad},
-                      {*in_x_grad}, {{"ksize", ksize},
-                                     {"strides", strides},
-                                     {"pads", paddings},
-                                     {"global_pooling", global_pooling},
-                                     {"ceil_mode", false},
-                                     {"exclusive", exclusive},
-                                     {"data_format", data_format}});
+          NpuOpRunner("MaxPoolV3Grad", {*in_x, *out, *out_grad}, {*in_x_grad},
+                      {{"ksize", ksize_vec},
+                       {"strides", strides_vec},
+                       {"padding_mode", std::string("CALCULATED")},
+                       {"pads", paddings},
+                       {"data_format", data_format},
+                       {"global_pooling", global_pooling},
+                       {"ceil_mode", false}});
+    } else if (pooling_type == "avg") {
+      const auto &runner =
+          NpuOpRunner("AvgPoolV2GradD", {*out_grad}, {*in_x_grad},
+                      {{"orig_input_shape", framework::vectorize(in_x->dims())},
+                       {"ksize", ksize_vec},
+                       {"strides", strides_vec},
+                       {"padding_mode", std::string("CALCULATED")},
+                       {"pads", paddings},
+                       {"data_format", data_format},
+                       {"global_pooling", global_pooling},
+                       {"ceil_mode", false},
+                       {"exclusive", exclusive}});
       runner.Run(stream);
     }
   }

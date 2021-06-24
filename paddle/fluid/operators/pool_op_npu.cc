@@ -126,6 +126,7 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
                        {"data_format", data_format},
                        {"global_pooling", global_pooling},
                        {"ceil_mode", false}});
+      runner.Run(stream);
     } else if (pooling_type == "avg") {
       const auto &runner =
           NpuOpRunner("AvgPoolV2GradD", {*out_grad}, {*in_x_grad},

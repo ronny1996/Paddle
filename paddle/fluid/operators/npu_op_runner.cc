@@ -18,6 +18,7 @@ limitations under the License. */
 #include <paddle/fluid/framework/operator.h>
 
 #include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -111,32 +112,42 @@ const std::string &NpuOpRunner::Type() { return op_type_; }
 NpuOpRunner &NpuOpRunner::AddAttr(const std::string &name,
                                   const NPUAttribute &attr) {
   if (attr.type() == typeid(bool)) {
+    VLOG(4) << "Attr " << name << " : " << BOOST_GET_CONST(bool, attr);
     PADDLE_ENFORCE_NPU_SUCCESS(
         aclopSetAttrBool(attr_, name.c_str(), BOOST_GET_CONST(bool, attr)));
   } else if (attr.type() == typeid(int)) {
+    VLOG(4) << "Attr " << name << " : " << BOOST_GET_CONST(int, attr);
     PADDLE_ENFORCE_NPU_SUCCESS(
         aclopSetAttrInt(attr_, name.c_str(), BOOST_GET_CONST(int, attr)));
 
   } else if (attr.type() == typeid(int64_t)) {
+    VLOG(4) << "Attr " << name << " : " << BOOST_GET_CONST(int64_t, attr);
     PADDLE_ENFORCE_NPU_SUCCESS(
         aclopSetAttrInt(attr_, name.c_str(), BOOST_GET_CONST(int64_t, attr)));
   } else if (attr.type() == typeid(float)) {
+    VLOG(4) << "Attr " << name << " : " << BOOST_GET_CONST(float, attr);
     PADDLE_ENFORCE_NPU_SUCCESS(
         aclopSetAttrFloat(attr_, name.c_str(), BOOST_GET_CONST(float, attr)));
   } else if (attr.type() == typeid(std::vector<bool>)) {
     auto a = BOOST_GET_CONST(std::vector<bool>, attr);
     std::vector<uint8_t> cast_a;
+    std::stringstream ss;
     for (auto it : a) {
+      ss << static_cast<int64_t>(it) << ',';
       cast_a.push_back(static_cast<uint8_t>(it));
     }
+    VLOG(4) << "Attr " << name << " : " << ss.str();
     PADDLE_ENFORCE_NPU_SUCCESS(aclopSetAttrListBool(
         attr_, name.c_str(), cast_a.size(), cast_a.data()));
   } else if (attr.type() == typeid(std::vector<int>)) {
     auto a = BOOST_GET_CONST(std::vector<int>, attr);
     std::vector<int64_t> cast_a;
+    std::stringstream ss;
     for (auto it : a) {
+      ss << static_cast<int64_t>(it) << ',';
       cast_a.push_back(static_cast<int64_t>(it));
     }
+    VLOG(4) << "Attr " << name << " : " << ss.str();
     PADDLE_ENFORCE_NPU_SUCCESS(
         aclopSetAttrListInt(attr_, name.c_str(), cast_a.size(), cast_a.data()));
   } else if (attr.type() == typeid(std::vector<int64_t>)) {
@@ -145,18 +156,27 @@ NpuOpRunner &NpuOpRunner::AddAttr(const std::string &name,
         aclopSetAttrListInt(attr_, name.c_str(), a.size(), a.data()));
   } else if (attr.type() == typeid(std::vector<float>)) {
     auto a = BOOST_GET_CONST(std::vector<float>, attr);
+    std::stringstream ss;
+    for (auto it : a) {
+      ss << it << ',';
+    }
+    VLOG(4) << "Attr " << name << " : " << ss.str();
     PADDLE_ENFORCE_NPU_SUCCESS(
         aclopSetAttrListFloat(attr_, name.c_str(), a.size(), a.data()));
   } else if (attr.type() == typeid(std::string)) {
     auto a = BOOST_GET_CONST(std::string, attr);
+    VLOG(4) << "Attr " << name << " : " << a;
     PADDLE_ENFORCE_NPU_SUCCESS(
         aclopSetAttrString(attr_, name.c_str(), a.c_str()));
   } else if (attr.type() == typeid(std::vector<std::string>)) {
     auto a = BOOST_GET_CONST(std::vector<std::string>, attr);
     std::vector<const char *> s;
+    std::stringstream ss;
     for (auto &it : a) {
+      ss << it << ',';
       s.push_back(it.data());
     }
+    VLOG(4) << "Attr " << name << " : " << ss.str();
     PADDLE_ENFORCE_NPU_SUCCESS(
         aclopSetAttrListString(attr_, name.c_str(), s.size(), s.data()));
   } else if (attr.type() == typeid(std::vector<std::vector<int64_t>>)) {

@@ -64,7 +64,8 @@ class NPUPoolOpKernel : public framework::OpKernel<T> {
                      {"stride", strides},
                      {"pad", paddings},
                      {"dilation", std::vector<int64_t>({1, 1, 1, 1})},
-                     {"ceil_mode", static_cast<int64_t>(0)}});
+                     {"ceil_mode", static_cast<int64_t>(0)},
+                     {"data_format", data_format}});
     auto stream = dev_ctx.stream();
     runner.Run(stream);
   }

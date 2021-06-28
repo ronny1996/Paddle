@@ -28,7 +28,6 @@ template <typename T>
 class NPUReduceMeanOpKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
-    auto& dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
     auto* input = ctx.Input<Tensor>("X");
     auto* output = ctx.Output<Tensor>("Out");
     output->mutable_data<T>(ctx.GetPlace());
@@ -58,7 +57,6 @@ template <typename T>
 class NPUReduceMeanGradOpKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
-    auto& dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
     auto* input = ctx.Input<Tensor>("X");
     auto* output = ctx.Input<Tensor>("Out");
     auto* output_grad = ctx.Input<Tensor>(framework::GradVarName("Out"));

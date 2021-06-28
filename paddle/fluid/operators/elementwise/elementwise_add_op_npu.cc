@@ -17,56 +17,12 @@ limitations under the License. */
 
 #include "paddle/fluid/framework/tensor_util.h"
 #include "paddle/fluid/operators/elementwise/elementwise_add_op.h"
+#include "paddle/fluid/operators/elementwise/elementwise_npu.h"
 #include "paddle/fluid/operators/npu_op_runner.h"
 
 namespace paddle {
 namespace operators {
 using Tensor = framework::Tensor;
-
-template <typename T>
-void NpuBroadcastTo(const framework::ExecutionContext& ctx, const Tensor* dst,
-                    const Tensor* src, int axis, Tensor* transformed_src) {
-  // dst.dims().size() > src.dims().size();
-  framework::DDim dst_dims = dst->dims();
-  framework::DDim src_dims = src->dims();
-  framework::DDim trim_src_dims = trim_trailing_singular_dims(src_dims);
-  axis = (axis == -1 ? dst_dims.size() - src_dims.size() : axis);
-  auto tile_axis = axis + trim_src_dims.size();
-
-  auto stream =
-      ctx.template device_context<paddle::platform::NPUDeviceContext>()
-          .stream();
-
-  auto expand_to_dims = framework::slice_ddim(dst_dims, 0, tile_axis);
-  auto expand_to_dims_vec = framework::vectorize<int>(expand_to_dims);
-
-  Tensor tmp_src;
-  tmp_src.ShareDataWith(*src);
-  tmp_src.Resize(trim_src_dims);
-
-  Tensor tmp_tensor;
-  tmp_tensor.mutable_data<T>(expand_to_dims, ctx.GetPlace());
-  const auto& expand_runner = NpuOpRunner("ExpandD", {tmp_src}, {tmp_tensor},
-                                          {{"shape", expand_to_dims_vec}});
-  expand_runner.Run(stream);
-
-  Tensor tmp_tensor_2;
-  if (tile_axis < dst_dims.size()) {
-    expand_to_dims_vec.push_back(1);
-    tmp_tensor.Resize(framework::make_ddim(expand_to_dims_vec));
-    auto tiles_num = framework::product(
-        framework::slice_ddim(dst_dims, tile_axis, dst_dims.size()));
-    tmp_tensor_2.mutable_data<T>(dst_dims, ctx.GetPlace());
-    const auto& tile_runner =
-        NpuOpRunner("TileWithAxis", {tmp_tensor}, {tmp_tensor_2},
-                    {{"axis", static_cast<int64_t>(tile_axis)},
-                     {"tiles", static_cast<int64_t>(tiles_num)}});
-    tile_runner.Run(stream);
-  } else {
-    tmp_tensor_2.ShareDataWith(tmp_tensor);
-  }
-  framework::TensorCopy(tmp_tensor_2, ctx.GetPlace(), transformed_src);
-}
 
 template <typename T>
 class ElementwiseAddNPUKernel : public framework::OpKernel<T> {
@@ -236,11 +192,12 @@ class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
       if (dx->dims() != dout->dims()) {
         framework::DDim trim_dx_dims = trim_trailing_singular_dims(dx->dims());
         for (int64_t ax = 0; ax < dout->dims().size(); ax++) {
-          if (ax < axis || ax >= trim_dx_dims.size() + axis) {
+          if ((ax < axis || ax >= trim_dx_dims.size() + axis) ||
+              (dout->dims()[ax] > 1 && trim_dx_dims[ax - axis] == 1)) {
             reduce_axes.push_back(ax);
           }
         }
-        // dont need care the axis with dim 1
+        // dont care the axis with dim 1
         if (!reduce_axes.empty()) {
           const auto& runner =
               NpuOpRunner("ReduceSumD", {*dout}, {*dx},
@@ -259,7 +216,8 @@ class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
       if (dy->dims() != dout->dims()) {
         framework::DDim trim_dy_dims = trim_trailing_singular_dims(dy->dims());
         for (int64_t ax = 0; ax < dout->dims().size(); ax++) {
-          if (ax < axis || ax >= trim_dy_dims.size() + axis) {
+          if ((ax < axis || ax >= trim_dy_dims.size() + axis) ||
+              (dout->dims()[ax] > 1 && trim_dy_dims[ax - axis] == 1)) {
             reduce_axes.push_back(ax);
           }
         }

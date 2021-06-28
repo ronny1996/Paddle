@@ -17,7 +17,6 @@ limitations under the License. */
 #include "paddle/fluid/framework/op_registry.h"
 #include "paddle/fluid/framework/operator.h"
 #include "paddle/fluid/operators/elementwise/elementwise_npu.h"
-#include "paddle/fluid/operators/reduce_ops/reduce_op_npu.h"
 
 #include "paddle/fluid/operators/npu_op_runner.h"
 #include "paddle/fluid/platform/npu_helper.h"

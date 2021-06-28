@@ -133,12 +133,19 @@ def _convert_to_place(device):
         selected_xpus = os.getenv("FLAGS_selected_xpus", "0").split(",")
         device_id = int(selected_xpus[0])
         place = core.XPUPlace(device_id)
+    elif lower_device == 'npu':
+        if not core.is_compiled_with_npu():
+            raise ValueError("The device should not be 'npu', "
+                             "since PaddlePaddle is not compiled with NPU")
+        selected_npus = os.getenv("FLAGS_selected_npus", "0").split(",")
+        device_id = int(selected_npus[0])
+        place = core.NPUPlace(device_id)
     else:
         avaliable_gpu_device = re.match(r'gpu:\d+', lower_device)
         avaliable_xpu_device = re.match(r'xpu:\d+', lower_device)
         if not avaliable_gpu_device and not avaliable_xpu_device:
             raise ValueError(
-                "The device must be a string which is like 'cpu', 'gpu', 'gpu:x', 'xpu' or 'xpu:x'"
+                "The device must be a string which is like 'cpu', 'gpu', 'gpu:x', 'xpu', 'xpu:x', 'npu' or 'npu:x'"
             )
         if avaliable_gpu_device:
             if not core.is_compiled_with_cuda():
@@ -213,5 +220,7 @@ def get_device():
     elif isinstance(place, core.XPUPlace):
         device_id = place.get_device_id()
         device = 'xpu:' + str(device_id)
-
+    elif isinstance(place, core.NPUPlace):
+        device_id = place.get_device_id()
+        device = 'npu:' + str(device_id)
     return device

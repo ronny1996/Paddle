@@ -100,8 +100,8 @@ class NPUReduceMeanGradOpKernel : public framework::OpKernel<T> {
     NpuBroadcastTo<T>(ctx, input_grad, &tmp_output_grad, 0,
                       &transformed_out_grad);
 
-    const auto& runner2 =
-        NpuOpRunner("Mul", {*input_grad, tmp_output_grad}, {*input_grad}, {});
+    const auto& runner2 = NpuOpRunner(
+        "Mul", {*input_grad, transformed_out_grad}, {*input_grad}, {});
     runner2.Run(stream);
   }
 };

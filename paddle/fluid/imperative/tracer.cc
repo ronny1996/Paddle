@@ -120,6 +120,24 @@ paddle::framework::GarbageCollector* Tracer::MutableGarbageCollectorIfNotExists(
       gc.reset(new framework::CPUGarbageCollector(
           BOOST_GET_CONST(platform::CPUPlace, place), 0));
       VLOG(10) << "Created GarbageCollector at " << place;
+    } else if (platform::is_npu_place(place)) {
+#ifdef PADDLE_WITH_ASCEND_CL
+      if (framework::IsFastEagerDeletionModeEnabled()) {
+        VLOG(4) << "Use unsafe fast gc for NPU.";
+        gc.reset(new framework::NPUUnsafeFastGarbageCollector(
+            BOOST_GET_CONST(platform::NPUPlace, place), 0));
+      } else {
+        PADDLE_THROW(platform::errors::Unimplemented(
+            "Please set FLAGS_fast_eager_deletion_mode=true to use "
+            "GarbageCollector on NPU."));
+        VLOG(4) << "Use default stream gc for NPU.";
+        gc.reset(new framework::NPUDefaultStreamGarbageCollector(
+            BOOST_GET_CONST(platform::NPUPlace, place), 0));
+      }
+#else
+      PADDLE_THROW(
+          platform::errors::Unimplemented("No NPU gc found in CPU/NPU paddle"));
+#endif
     } else {
       PADDLE_THROW(platform::errors::PreconditionNotMet(
           "Unsupported place for garbage collection"));

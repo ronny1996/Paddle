@@ -195,8 +195,10 @@ class SoftmaxWithCrossEntropyOp : public framework::OperatorWithKernel {
 
     ctx->SetOutputDim("Softmax", logits_dims);
 #ifdef PADDLE_WITH_ASCEND_CL
-    ctx->SetOutputDim("Backprop", logits_dims);
-    ctx->ShareLoD("Logits", /*->*/ "Backprop");
+    if (ctx->HasInput("Backprop")) {
+      ctx->SetOutputDim("Backprop", logits_dims);
+      ctx->ShareLoD("Logits", /*->*/ "Backprop");
+    }
 #endif
     logits_dims[axis] = 1;
     ctx->SetOutputDim("Loss", logits_dims);

@@ -174,9 +174,13 @@ static void InitTensorForVarBase(imperative::VarBase *self,
     SetTensorFromPyArray<platform::CUDAPinnedPlace>(
         tensor, array, BOOST_GET_CONST(platform::CUDAPinnedPlace, place),
         zero_copy);
+  } else if (platform::is_npu_place(place)) {
+    SetTensorFromPyArray<platform::NPUPlace>(
+        tensor, array, BOOST_GET_CONST(platform::NPUPlace, place), zero_copy);
   } else {
     PADDLE_THROW(platform::errors::InvalidArgument(
-        "Place should be one of CPUPlace/XPUPlace/CUDAPlace/CUDAPinnedPlace"));
+        "Place should be one of "
+        "CPUPlace/XPUPlace/CUDAPlace/CUDAPinnedPlace/NPUPlace"));
   }
   if (stop_gradient != -1) {
     self->SetOverridedStopGradient(stop_gradient);

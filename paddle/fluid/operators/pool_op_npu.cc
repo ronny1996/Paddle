@@ -56,16 +56,16 @@ class NPUPoolOpKernel : public framework::OpKernel<T> {
     UpdatePadding(&paddings, global_pooling, adaptive, padding_algorithm,
                   data_dims, strides, ksize);
     int64_t pooling_mode = (pooling_type == "max" ? 0 : 1);  // 0: max, 1: avg
-    const auto &runner =
-        NpuOpRunner("Pooling", {*in_x}, {*out},
-                    {{"mode", pooling_mode},
-                     {"global_pooling", global_pooling},
-                     {"window", ksize},
-                     {"stride", strides},
-                     {"pad", paddings},
-                     {"dilation", std::vector<int64_t>({1, 1, 1, 1})},
-                     {"ceil_mode", static_cast<int64_t>(1)},
-                     {"data_format", data_format}});
+    const auto &runner = NpuOpRunner(
+        "Pooling", {*in_x}, {*out},
+        {{"mode", pooling_mode},
+         {"global_pooling", global_pooling},
+         {"window", ksize},
+         {"stride", strides},
+         {"pad", paddings},
+         {"dilation", std::vector<int64_t>({1, 1, 1, 1})},
+         {"ceil_mode", static_cast<int64_t>(1)},  // 1: floor, 0: ceil
+         {"data_format", data_format}});
     auto stream = dev_ctx.stream();
     runner.Run(stream);
   }
@@ -125,7 +125,7 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
                        {"pads", paddings},
                        {"data_format", data_format},
                        {"global_pooling", global_pooling},
-                       {"ceil_mode", true}});
+                       {"ceil_mode", false}});  // 0: floor, 1: ceil
       runner.Run(stream);
     } else if (pooling_type == "avg") {
       const auto &runner =
@@ -137,7 +137,7 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
                        {"pads", paddings},
                        {"data_format", data_format},
                        {"global_pooling", global_pooling},
-                       {"ceil_mode", true},
+                       {"ceil_mode", false},  // 0: floor, 1: ceil
                        {"exclusive", exclusive}});
       runner.Run(stream);
     }

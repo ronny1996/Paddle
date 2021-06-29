@@ -31,6 +31,9 @@
 #ifdef PADDLE_WITH_XPU
 #include "xpu/refactor/math.h"
 #endif
+#ifdef PADDLE_WITH_ASCEND_CL
+#include "paddle/fluid/operators/npu_op_runner.h"
+#endif
 
 namespace paddle {
 namespace imperative {
@@ -193,7 +196,18 @@ void TensorAdd(const framework::Variable& src, framework::Variable* dst) {
     return;                                                          \
   }
 
+#ifdef PADDLE_WITH_ASCEND_CL
+  platform::DeviceContextPool& pool = platform::DeviceContextPool::Instance();
+  platform::DeviceContext* ctx = pool.Get(place);
+  auto dev_ctx = dynamic_cast<platform::NPUDeviceContext*>(ctx);
+  auto stream = dev_ctx->stream();
+  const auto& runner = operators::NpuOpRunner("Add", {*dst_tensor, src_tensor},
+                                              {*dst_tensor}, {});
+  runner.Run(stream);
+  return;
+#else
   PADDLE_TENSOR_ADD(float);
+#endif
 #ifndef PADDLE_WITH_XPU
   // NOTE(phlrain): xpu only support float
   PADDLE_TENSOR_ADD(double);

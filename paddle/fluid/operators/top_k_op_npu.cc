@@ -89,6 +89,7 @@ class TopkNPUKernel : public framework::OpKernel<T> {
 namespace ops = paddle::operators;
 
 // Ascend Op TopKD only support input float 16 dtype
-REGISTER_OP_NPU_KERNEL(top_k,
-                       ops::TopkNPUKernel<paddle::platform::NPUDeviceContext,
-                                          paddle::platform::float16>);
+REGISTER_OP_NPU_KERNEL(
+    top_k, ops::TopkNPUKernel<paddle::platform::NPUDeviceContext,
+                              paddle::platform::float16>,
+    ops::TopkNPUKernel<paddle::platform::NPUDeviceContext, float>);

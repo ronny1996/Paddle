@@ -75,7 +75,7 @@ endif()
 list(APPEND AllocatorFacadeDeps cpu_allocator locked_allocator aligned_allocator retry_allocator buffered_allocator naive_best_fit_allocator auto_growth_best_fit_allocator best_fit_allocator)
 
 if (WITH_ASCEND_CL)
-    list(APPEND AllocatorFacadeDeps npu_pinned_allocator)
+    list(APPEND AllocatorFacadeDeps npu_pinned_allocator npu_allocator)
 endif()
 
 

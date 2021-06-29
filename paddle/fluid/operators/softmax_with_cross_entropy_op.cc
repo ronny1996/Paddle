@@ -54,8 +54,7 @@ class SoftmaxWithCrossEntropyOpMaker
         "exp(logits -max_logits) / sum(exp(logits - max_logits)) - labels, "
         "where labels is ont-hot."
         "Currently, the tensor is generated and used in npu kernel only. ")
-        .AsIntermediate()
-        .AsDispensable();
+        .AsIntermediate();
 #endif
     AddOutput("Loss",
               "(Tensor, default: Tensor<float>), A tensor in same shape with "

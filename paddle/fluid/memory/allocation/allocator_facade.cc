@@ -21,6 +21,7 @@
 #include "paddle/fluid/memory/allocation/cpu_allocator.h"
 #include "paddle/fluid/memory/allocation/naive_best_fit_allocator.h"
 #ifdef PADDLE_WITH_ASCEND_CL
+#include "paddle/fluid/memory/allocation/npu_allocator.h"
 #include "paddle/fluid/memory/allocation/npu_pinned_allocator.h"
 #endif
 #include "paddle/fluid/memory/allocation/retry_allocator.h"
@@ -161,6 +162,16 @@ class AllocatorFacadePrivate {
       system_allocators_[p] = std::make_shared<CUDAAllocator>(p);
     }
 #endif
+#if defined(PADDLE_WITH_ASCEND_CL)
+    system_allocators_[platform::NPUPinnedPlace()] =
+        std::make_shared<paddle::memory::allocation::NPUPinnedAllocator>();
+    int device_count = platform::GetNPUDeviceCount();
+    for (int i = 0; i < device_count; ++i) {
+      platform::NPUPlace p(i);
+      system_allocators_[p] =
+          std::make_shared<paddle::memory::allocation::NPUAllocator>(p);
+    }
+#endif
   }
 
   void InitNaiveBestFitCPUAllocator() {
@@ -240,7 +251,12 @@ class AllocatorFacadePrivate {
       places.emplace_back(platform::XPUPlace(dev_id));
     }
 #endif
-
+#ifdef PADDLE_WITH_ASCEND_CL
+    int device_count = platform::GetNPUDeviceCount();
+    for (int dev_id = 0; dev_id < device_count; ++dev_id) {
+      places.emplace_back(platform::NPUPlace(dev_id));
+    }
+#endif
     for (auto& p : places) {
       zero_size_allocators_[p] = std::make_shared<ZeroSizeAllocator>(p);
     }

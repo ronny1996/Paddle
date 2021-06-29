@@ -135,6 +135,8 @@ static const platform::Place PyObjectToPlace(const py::object &place_obj) {
     return place_obj.cast<platform::XPUPlace>();
   } else if (py::isinstance<platform::CUDAPinnedPlace>(place_obj)) {
     return place_obj.cast<platform::CUDAPinnedPlace>();
+  } else if (py::isinstance<platform::NPUPlace>(place_obj)) {
+    return place_obj.cast<platform::NPUPlace>();
   } else if (py::isinstance<platform::Place>(place_obj)) {
     return place_obj.cast<platform::Place>();
   } else {

@@ -64,7 +64,7 @@ class NPUPoolOpKernel : public framework::OpKernel<T> {
                      {"stride", strides},
                      {"pad", paddings},
                      {"dilation", std::vector<int64_t>({1, 1, 1, 1})},
-                     {"ceil_mode", static_cast<int64_t>(0)},
+                     {"ceil_mode", static_cast<int64_t>(1)},
                      {"data_format", data_format}});
     auto stream = dev_ctx.stream();
     runner.Run(stream);
@@ -125,7 +125,7 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
                        {"pads", paddings},
                        {"data_format", data_format},
                        {"global_pooling", global_pooling},
-                       {"ceil_mode", false}});
+                       {"ceil_mode", true}});
       runner.Run(stream);
     } else if (pooling_type == "avg") {
       const auto &runner =
@@ -137,7 +137,7 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
                        {"pads", paddings},
                        {"data_format", data_format},
                        {"global_pooling", global_pooling},
-                       {"ceil_mode", false},
+                       {"ceil_mode", true},
                        {"exclusive", exclusive}});
       runner.Run(stream);
     }

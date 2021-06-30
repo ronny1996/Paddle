@@ -67,15 +67,17 @@ class NPUReduceMeanGradOpKernel : public framework::OpKernel<T> {
     auto dims = ctx.Attr<std::vector<int>>("dim");
 
     auto input_dims_vec = framework::vectorize(input->dims());
+
     int reduce_numel = 1;
+    auto reduce_dims = dims;
     if (reduce_all) {
-      for (auto d : input_dims_vec) {
-        reduce_numel *= d;
+      reduce_dims.clear();
+      for (size_t d = 0; d < input_dims_vec.size(); ++d) {
+        reduce_dims.push_back(static_cast<int>(d));
       }
-    } else {
-      for (auto d : dims) {
-        reduce_numel *= input_dims_vec[d];
-      }
+    }
+    for (auto d : dims) {
+      reduce_numel *= input_dims_vec[d];
     }
 
     const auto& runner =
@@ -90,14 +92,8 @@ class NPUReduceMeanGradOpKernel : public framework::OpKernel<T> {
     Tensor transformed_out_grad;
     Tensor tmp_output_grad;
     auto tmp_output_dims_vec = input_dims_vec;
-    if (reduce_all) {
-      for (auto& d : tmp_output_dims_vec) {
-        d = 1;
-      }
-    } else {
-      for (auto d : dims) {
-        tmp_output_dims_vec[d] = 1;
-      }
+    for (auto d : reduce_dims) {
+      tmp_output_dims_vec[d] = 1;
     }
     tmp_output_grad.ShareDataWith(*output_grad);
     tmp_output_grad.Resize(framework::make_ddim(tmp_output_dims_vec));

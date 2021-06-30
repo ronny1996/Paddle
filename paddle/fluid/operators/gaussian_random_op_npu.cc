@@ -27,29 +27,38 @@ class NPUGaussianRandomKernel : public framework::OpKernel<T> {
   void Compute(const framework::ExecutionContext& ctx) const override {
     auto& dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
     auto* out = ctx.Output<framework::Tensor>("Out");
-    framework::Tensor out_shape;
+
+    float mean = ctx.Attr<float>("mean");
+    float std = ctx.Attr<float>("std");
+    auto seed = ctx.Attr<int>("seed");
+
     auto shape = GetShape(ctx);
     out->Resize(shape);
     out->mutable_data<T>(ctx.GetPlace());
+    framework::Tensor out_shape;
     out_shape.mutable_data<int>(framework::make_ddim({out->dims().size()}),
                                 out->place());
+    framework::TensorFromVector<int>(framework::vectorize<int>(out->dims()),
+                                     dev_ctx, &out_shape);
 
-    std::vector<int> out_shape_vec = framework::vectorize<int>(out->dims());
-    framework::TensorFromVector<int>(out_shape_vec, dev_ctx, &out_shape);
-
-    auto seed = ctx.Attr<int>("seed");
-
-    // auto dtype = paddle::platform::VarTypeToGeType(out->type());
     auto dtype = ConvertToNpuDtype(out->type());
-
-    const auto& runner = NpuOpRunner(
-        "StandardNormal", {out_shape}, {*out},
-        {{"dtype", dtype}, {"seed", seed}, {"seed2", static_cast<int>(0)}});
 
     auto stream =
         ctx.template device_context<paddle::platform::NPUDeviceContext>()
             .stream();
-    runner.Run(stream);
+
+    const auto& standard_runner = NpuOpRunner(
+        "StandardNormal", {out_shape}, {*out},
+        {{"dtype", dtype}, {"seed", seed}, {"seed2", static_cast<int>(0)}});
+    standard_runner.Run(stream);
+
+    const auto& muls_runner =
+        NpuOpRunner("Muls", {*out}, {*out}, {{"value", std}});
+    muls_runner.Run(stream);
+
+    const auto& adds_runner =
+        NpuOpRunner("Adds", {*out}, {*out}, {{"value", mean}});
+    adds_runner.Run(stream);
   }
 };
 }  // namespace operators

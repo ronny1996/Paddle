@@ -90,8 +90,14 @@ class NPUReduceMeanGradOpKernel : public framework::OpKernel<T> {
     Tensor transformed_out_grad;
     Tensor tmp_output_grad;
     auto tmp_output_dims_vec = input_dims_vec;
-    for (auto d : dims) {
-      tmp_output_dims_vec[d] = 1;
+    if (reduce_all) {
+      for (auto& d : tmp_output_dims_vec) {
+        d = 1;
+      }
+    } else {
+      for (auto d : dims) {
+        tmp_output_dims_vec[d] = 1;
+      }
     }
     tmp_output_grad.ShareDataWith(*output_grad);
     tmp_output_grad.Resize(framework::make_ddim(tmp_output_dims_vec));

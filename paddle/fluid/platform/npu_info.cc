@@ -182,6 +182,11 @@ void NPUMemcpyAsync(void *dst, const void *src, size_t count,
   dst_max_count = dst_max_count ? dst_max_count : count;
   VLOG(4) << dst << " " << dst_max_count << " " << src << " " << count << " "
           << kind << " " << stream;
+  PADDLE_ENFORCE_EQ(
+      (static_cast<uint64_t>(dst) % 64) + (static_cast<uint64_t>(src) % 64), 0,
+      platform::errors::Fatal(
+          "Address must be aligned with 64 byte, but got dst=0x%x, src=0x%x.",
+          dst, src));
   PADDLE_ENFORCE_NPU_SUCCESS(
       aclrtMemcpyAsync(dst, dst_max_count, src, count, kind, stream));
 }

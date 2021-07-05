@@ -197,7 +197,7 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
 }  // namespace paddle
 
 REGISTER_OP_NPU_KERNEL(conv2d, paddle::operators::NPUConvOpKernel<float>,
-                       paddle::operators::NPUConvOpKernel<double>);
+                       paddle::operators::NPUConvOpKernel<paddle::platform::float16>);
 REGISTER_OP_NPU_KERNEL(conv2d_grad,
                        paddle::operators::NPUConvGradOpKernel<float>,
-                       paddle::operators::NPUConvGradOpKernel<double>);
+                       paddle::operators::NPUConvGradOpKernel<paddle::platform::float16>);

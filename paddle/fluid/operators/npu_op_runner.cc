@@ -338,6 +338,7 @@ void NpuOpRunner::Run(aclrtStream stream) const {
       stream);
   VLOG(4) << "after aclopCompileAndExecute: " << ret;
   PADDLE_ENFORCE_NPU_SUCCESS(ret);
+  PADDLE_ENFORCE_NPU_SUCCESS(aclrtSynchronizeStream(stream));
 }
 
 }  // namespace operators

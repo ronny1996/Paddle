@@ -158,7 +158,7 @@ class NPUBatchNormGradOpKernel : public framework::OpKernel<T> {
 
 REGISTER_OP_NPU_KERNEL(batch_norm,
                        paddle::operators::NPUBatchNormOpKernel<float>,
-                       paddle::operators::NPUBatchNormOpKernel<double>);
+                       paddle::operators::NPUBatchNormOpKernel<paddle::platform::float16>);
 REGISTER_OP_NPU_KERNEL(batch_norm_grad,
                        paddle::operators::NPUBatchNormGradOpKernel<float>,
-                       paddle::operators::NPUBatchNormGradOpKernel<double>);
+                       paddle::operators::NPUBatchNormGradOpKernel<paddle::platform::float16>);

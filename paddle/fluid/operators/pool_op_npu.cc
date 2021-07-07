@@ -128,18 +128,37 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
                        {"ceil_mode", false}});  // 0: floor, 1: ceil
       runner.Run(stream);
     } else if (pooling_type == "avg") {
-      const auto &runner =
-          NpuOpRunner("AvgPoolV2GradD", {*out_grad}, {*in_x_grad},
-                      {{"orig_input_shape", framework::vectorize(in_x->dims())},
-                       {"ksize", ksize_vec},
-                       {"strides", strides_vec},
-                       {"padding_mode", std::string("CALCULATED")},
-                       {"pads", paddings},
-                       {"data_format", data_format},
-                       {"global_pooling", global_pooling},
-                       {"ceil_mode", false},  // 0: floor, 1: ceil
-                       {"exclusive", exclusive}});
-      runner.Run(stream);
+      // const auto &runner =
+      //     NpuOpRunner("AvgPoolV2GradD", {*out_grad}, {*in_x_grad},
+      //                 {{"orig_input_shape", framework::vectorize(in_x->dims())},
+      //                  {"ksize", ksize_vec},
+      //                  {"strides", strides_vec},
+      //                  {"padding_mode", std::string("CALCULATED")},
+      //                  {"pads", paddings},
+      //                  {"data_format", data_format},
+      //                  {"global_pooling", global_pooling},
+      //                  {"ceil_mode", false},  // 0: floor, 1: ceil
+      //                  {"exclusive", exclusive}});
+      // runner.Run(stream);
+
+      auto cpu_dev_ctx = platform::CPUDeviceContext(platform::CPUPlace());
+      Tensor cpu_in_x, cpu_out, cpu_in_x_grad, cpu_out_grad;
+      cpu_in_x.mutable_data<T>(in_x->dims(), cpu_dev_ctx.GetPlace());
+      cpu_in_x_grad.mutable_data<T>(in_x_grad->dims(), cpu_dev_ctx.GetPlace());
+      cpu_out.mutable_data<T>(out->dims(), cpu_dev_ctx.GetPlace());
+      cpu_out_grad.mutable_data<T>(out_grad->dims(), cpu_dev_ctx.GetPlace());
+
+      framework::TensorCopy(*in_x, cpu_dev_ctx.GetPlace(), dev_ctx, &cpu_in_x);
+      framework::TensorCopy(*out, cpu_dev_ctx.GetPlace(), dev_ctx, &cpu_out);
+      framework::TensorCopy(*out_grad, cpu_dev_ctx.GetPlace(), dev_ctx, &cpu_out_grad);
+      dev_ctx.Wait();
+      paddle::operators::math::Pool2dGradFunctor<platform::CPUDeviceContext, paddle::operators::math::AvgPoolGrad<T>, T>
+          pool2d_backward;
+      paddle::operators::math::AvgPoolGrad<T> pool_process;
+      pool2d_backward(cpu_dev_ctx, cpu_in_x, cpu_out, cpu_out_grad, ksize, strides,
+                      paddings, data_format, exclusive, adaptive,
+                      &cpu_in_x_grad, pool_process);
+      framework::TensorCopy(cpu_in_x_grad, dev_ctx.GetPlace(), dev_ctx, in_x_grad);
     }
   }
 };

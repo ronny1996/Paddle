@@ -55,12 +55,10 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
 
     if (channel_last) {
       in_data_dims = framework::slice_ddim(in_dims, 1, in_dims.size() - 1);
-      filter_data_dims =
-          framework::slice_ddim(filter_dims, 1, in_dims.size() - 1);
     } else {
       in_data_dims = framework::slice_ddim(in_dims, 2, in_dims.size());
-      filter_data_dims = framework::slice_ddim(filter_dims, 2, in_dims.size());
     }
+    filter_data_dims = framework::slice_ddim(filter_dims, 2, in_dims.size());
 
     std::vector<int> ksize = framework::vectorize<int>(filter_data_dims);
     UpdatePaddingAndDilation(&paddings, &dilations, padding_algorithm,
@@ -69,7 +67,14 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
     std::vector<int> strides_vec(4, 1);
     std::vector<int> dilations_vec(4, 1);
 
+    Tensor input_tensor, output_tensor;
+    input_tensor.ShareDataWith(*input);
+    input_tensor.Resize(input->dims());
+    output_tensor.ShareDataWith(*output);
+    output_tensor.Resize(output->dims());
     if (channel_last) {
+      input_tensor.set_layout(DataLayout::kNHWC);
+      output_tensor.set_layout(DataLayout::kNHWC);
       strides_vec[1] = strides[0];
       strides_vec[2] = strides[1];
       dilations_vec[1] = dilations[0];
@@ -81,14 +86,13 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
       dilations_vec[3] = dilations[1];
     }
 
-    const auto& runner = NpuOpRunner("Conv2D", {*input, *filter}, {*output},
+    const auto& runner = NpuOpRunner("Conv2D", {input_tensor, *filter}, {output_tensor},
                                      {{"strides", strides_vec},
                                       {"pads", paddings},
                                       {"dilations", dilations_vec},
                                       {"groups", groups}});
 
-    auto stream = dev_ctx.stream();
-    runner.Run(stream);
+    runner.Run(dev_ctx.stream());
   }
 };
 
@@ -103,13 +107,6 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
     auto output_grad = ctx.Input<Tensor>(framework::GradVarName("Output"));
     auto input_grad = ctx.Output<Tensor>(framework::GradVarName("Input"));
     auto filter_grad = ctx.Output<Tensor>(framework::GradVarName("Filter"));
-
-    if (input_grad) {
-      input_grad->mutable_data<T>(ctx.GetPlace());
-    }
-    if (filter_grad) {
-      filter_grad->mutable_data<T>(ctx.GetPlace());
-    }
 
     const std::vector<int> strides =
         ctx.Attr<std::vector<int>>("strides");  // nhwc, n,c must be set to 1
@@ -132,12 +129,10 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
 
     if (channel_last) {
       in_data_dims = framework::slice_ddim(in_dims, 1, in_dims.size() - 1);
-      filter_data_dims =
-          framework::slice_ddim(filter_dims, 1, in_dims.size() - 1);
     } else {
       in_data_dims = framework::slice_ddim(in_dims, 2, in_dims.size());
-      filter_data_dims = framework::slice_ddim(filter_dims, 2, in_dims.size());
     }
+    filter_data_dims = framework::slice_ddim(filter_dims, 2, in_dims.size());
 
     std::vector<int> ksize = framework::vectorize<int>(filter_data_dims);
     UpdatePaddingAndDilation(&paddings, &dilations, padding_algorithm,
@@ -145,8 +140,17 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
 
     std::vector<int> strides_vec(4, 1);
     std::vector<int> dilations_vec(4, 1);
+    std::string data_format_str = "NCHW";
 
+    Tensor input_tensor, output_grad_tensor;
+    input_tensor.ShareDataWith(*input);
+    input_tensor.Resize(input->dims());
+    output_grad_tensor.ShareDataWith(*output_grad);
+    output_grad_tensor.Resize(output_grad->dims());
     if (channel_last) {
+      data_format_str = "NHWC";
+      input_tensor.set_layout(DataLayout::kNHWC);
+      output_grad_tensor.set_layout(DataLayout::kNHWC);
       strides_vec[1] = strides[0];
       strides_vec[2] = strides[1];
       dilations_vec[1] = dilations[0];
@@ -158,38 +162,45 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
       dilations_vec[3] = dilations[1];
     }
 
-    std::string data_format_str = "NCHW";
-    if (channel_last) {
-      data_format_str = "NHWC";
-    }
-
     if (filter_grad) {
+      filter_grad->mutable_data<T>(ctx.GetPlace());
       std::vector<int> filter_shape_vec =
           framework::vectorize<int>(filter->dims());
-      const auto& runner =
-          NpuOpRunner("Conv2DBackpropFilterD", {*input, *output_grad},
+
+      // Tensor filter_grad_tensor;
+      // filter_grad_tensor.ShareDataWith(*filter_grad);
+      // filter_grad_tensor.Resize(filter_grad->dims());
+      // if (channel_last) {
+      //   filter_grad_tensor.set_layout(DataLayout::kNHWC);
+      // }
+      const auto& runner = NpuOpRunner("Conv2DBackpropFilterD", {input_tensor, output_grad_tensor},
                       {*filter_grad}, {{"filter_size", filter_shape_vec},
                                        {"strides", strides_vec},
                                        {"pads", paddings},
                                        {"dilations", dilations_vec},
                                        {"groups", groups},
                                        {"data_format", data_format_str}});
-      auto stream = dev_ctx.stream();
-      runner.Run(stream);
+      runner.Run(dev_ctx.stream());
     }
     if (input_grad) {
+      input_grad->mutable_data<T>(ctx.GetPlace());
       std::vector<int> input_shape_vec =
           framework::vectorize<int>(input->dims());
-      const auto& runner =
-          NpuOpRunner("Conv2DBackpropInputD", {*filter, *output_grad},
-                      {*input_grad}, {{"input_size", input_shape_vec},
+
+      Tensor input_grad_tensor;
+      input_grad_tensor.ShareDataWith(*input_grad);
+      input_grad_tensor.Resize(input_grad->dims());
+      if (channel_last) {
+        input_grad_tensor.set_layout(DataLayout::kNHWC);
+      }
+      const auto& runner = NpuOpRunner("Conv2DBackpropInputD", {*filter, output_grad_tensor},
+                      {input_grad_tensor}, {{"input_size", input_shape_vec},
                                       {"strides", strides_vec},
                                       {"pads", paddings},
                                       {"dilations", dilations_vec},
                                       {"groups", groups},
                                       {"data_format", data_format_str}});
-      auto stream = dev_ctx.stream();
-      runner.Run(stream);
+      runner.Run(dev_ctx.stream());
     }
   }
 };

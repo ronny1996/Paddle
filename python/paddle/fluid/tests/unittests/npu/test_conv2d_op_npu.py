@@ -35,11 +35,11 @@ class TestConv2DOp(OpTest):
     def set_npu(self):
         self.__class__.use_npu = True
 
-    def _get_places(self):
-        return [fluid.NPUPlace(0)]
-
     def init_dtype(self):
         self.dtype = np.float32
+    
+    def init_data_format(self):
+        self.data_format = "NCHW"
 
     def setUp(self):
         self.set_npu()
@@ -49,7 +49,7 @@ class TestConv2DOp(OpTest):
         self.use_cuda = False
         self.use_mkldnn = False
         self.fuse_relu_before_depthwise_conv = False
-        self.data_format = "NCHW"
+        self.init_data_format()
         self.init_dtype()
         self.init_group()
         self.init_dilation()
@@ -65,7 +65,7 @@ class TestConv2DOp(OpTest):
         filter = np.random.uniform(-1, 1, self.filter_size).astype(self.dtype)
 
         output, _, _, _, _ = conv2d_forward_naive(input, filter, self.groups,
-                                                  conv2d_param)
+                                                  conv2d_param, data_format=self.data_format)
         output = output.astype(self.dtype)
 
         self.inputs = {
@@ -87,22 +87,22 @@ class TestConv2DOp(OpTest):
         self.outputs = {'Output': output}
 
     def test_check_output(self):
-        self.check_output(atol=1e-2, check_dygraph=False)
+        self.check_output_with_place(fluid.NPUPlace(0), atol=1e-2, check_dygraph=False)
 
     def test_check_grad(self):
-        self.check_grad({'Input', 'Filter'},
-            'Output', max_relative_error=0.02, check_dygraph=False)
+        self.check_grad_with_place(fluid.NPUPlace(0), {'Input', 'Filter'},
+            'Output', max_relative_error=0.03, check_dygraph=False)
 
     def test_check_grad_no_filter(self):
-        self.check_grad(['Input'],
+        self.check_grad_with_place(fluid.NPUPlace(0),['Input'],
             'Output',
-            max_relative_error=0.02,
+            max_relative_error=0.03,
             no_grad_set=set(['Filter']), check_dygraph=False)
 
     def test_check_grad_no_input(self):
-        self.check_grad(['Filter'],
+        self.check_grad_with_place(fluid.NPUPlace(0),['Filter'],
             'Output',
-            max_relative_error=0.02,
+            max_relative_error=0.03,
             no_grad_set=set(['Input']), check_dygraph=False)
 
     def init_test_case(self):
@@ -129,6 +129,29 @@ class TestConv2DOpCase2(TestConv2DOp):
         assert np.mod(self.input_size[1], self.groups) == 0
         f_c = self.input_size[1] // self.groups
         self.filter_size = [6, f_c, 3, 3]
+
+@unittest.skipIf(not paddle.is_compiled_with_npu(),
+                 "core is not compiled with NPU")
+class TestConv2DOpCase3(TestConv2DOp):
+    def init_data_format(self):
+        self.data_format = "NHWC"
+        
+    def init_test_case(self):
+        self.pad = [0, 0]
+        self.stride = [1, 1]
+        self.input_size = [2, 5, 5, 6]
+        assert np.mod(self.input_size[3], self.groups) == 0
+        f_c = self.input_size[3] // self.groups
+        self.filter_size = [6, f_c, 3, 3]
+
+@unittest.skipIf(not paddle.is_compiled_with_npu(),
+                 "core is not compiled with NPU")
+class TestConv2DOpCase4(TestConv2DOpCase3):
+    def init_data_format(self):
+        self.data_format = "NHWC"
+        
+    def init_group(self):
+        self.groups = 3
 
 if __name__ == "__main__":
     unittest.main()

@@ -302,20 +302,35 @@ class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
       }
     }
 #endif
-
-    if (dx && dy) {
+    if (dx && !dy && dx->dims() == dout->dims()) {
+      dx->mutable_data<T>(ctx.GetPlace());
+      framework::TensorCopy(
+          *dout, ctx.GetPlace(), dev_ctx, dx);
+    } else if (dy && !dx && dy->dims() == dout->dims()) {
+      dy->mutable_data<T>(ctx.GetPlace());
+      framework::TensorCopy(
+          *dout, ctx.GetPlace(), dev_ctx, dy);
+    } else {
       auto* x = ctx.Input<framework::Tensor>("X");
       auto* y = ctx.Input<framework::Tensor>("Y");
-      dx->mutable_data<T>(ctx.GetPlace());
-      dy->mutable_data<T>(ctx.GetPlace());
+
      // skip out
       auto *out = dout;
       auto cpu_dev_ctx = platform::CPUDeviceContext(platform::CPUPlace());
       framework::Tensor cpu_out, cpu_dout, cpu_dx, cpu_dy;
+      framework::Tensor *cpu_dx_ptr = nullptr, *cpu_dy_ptr = nullptr;
+      if (dx) {
+        dx->mutable_data<T>(ctx.GetPlace());
+        cpu_dx.mutable_data<T>(dx->dims(), cpu_dev_ctx.GetPlace());
+        cpu_dx_ptr = &cpu_dx;
+      }
+      if (dy) {
+        dy->mutable_data<T>(ctx.GetPlace());
+        cpu_dy.mutable_data<T>(dy->dims(), cpu_dev_ctx.GetPlace());
+        cpu_dy_ptr = &cpu_dy;
+      }
       cpu_out.mutable_data<T>(out->dims(), cpu_dev_ctx.GetPlace());
       cpu_dout.mutable_data<T>(dout->dims(), cpu_dev_ctx.GetPlace());
-      cpu_dx.mutable_data<T>(dx->dims(), cpu_dev_ctx.GetPlace());
-      cpu_dy.mutable_data<T>(dy->dims(), cpu_dev_ctx.GetPlace());
       framework::TensorCopy(*out, cpu_dev_ctx.GetPlace(), dev_ctx, &cpu_out);
       framework::TensorCopy(*dout, cpu_dev_ctx.GetPlace(), dev_ctx, &cpu_dout);
       dev_ctx.Wait();
@@ -326,26 +341,17 @@ class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
       auto cpu_ctx = framework::ExecutionContext(ctx.GetOp(), ctx.scope(), cpu_dev_ctx, framework::RuntimeContext({}, {}));
       if (x_dim == y_dim) {
         ElemwiseGradComputeNoBroadcast<platform::CPUDeviceContext, T, IdentityGrad<T>, IdentityGrad<T>>(
-            cpu_ctx, x_dim, y_dim, cpu_dout, cpu_dout, cpu_out, cpu_dout, axis, &cpu_dx, &cpu_dy, IdentityGrad<T>(), IdentityGrad<T>());
+            cpu_ctx, x_dim, y_dim, cpu_dout, cpu_dout, cpu_out, cpu_dout, axis, cpu_dx_ptr, cpu_dy_ptr, IdentityGrad<T>(), IdentityGrad<T>());
       } else {
         ElemwiseGradComputeWithBroadcast<platform::CPUDeviceContext, T, IdentityGrad<T>, IdentityGrad<T>>(
-            cpu_ctx, x_dim, y_dim, cpu_dout, cpu_dout, cpu_out, cpu_dout, axis, &cpu_dx, &cpu_dy, IdentityGrad<T>(), IdentityGrad<T>());
+            cpu_ctx, x_dim, y_dim, cpu_dout, cpu_dout, cpu_out, cpu_dout, axis, cpu_dx_ptr, cpu_dy_ptr, IdentityGrad<T>(), IdentityGrad<T>());
       }
-      // if (dx->dims() == dy->dims()) {
-      //   elementwise_add_grad<platform::CPUDeviceContext, T>(framework::ExecutionContext(ctx.GetOp(), ctx.scope(), cpu_dev_ctx, cpu_ctx), x, y, &cpu_out, &cpu_dout, &cpu_dx, &cpu_dy);
-      // } else {
-      //   default_elementwise_add_grad<platform::CPUDeviceContext, T>(framework::ExecutionContext(ctx.GetOp(), ctx.scope(), cpu_dev_ctx, cpu_ctx), x, y, &cpu_out, &cpu_dout, &cpu_dx, &cpu_dy);
-      // }
-      framework::TensorCopy(cpu_dx, dev_ctx.GetPlace(), dev_ctx, dx);
-      framework::TensorCopy(cpu_dy, dev_ctx.GetPlace(), dev_ctx, dy);
-    } else if (dx && !dy) {
-      dx->mutable_data<T>(ctx.GetPlace());
-      framework::TensorCopy(
-          *dout, ctx.GetPlace(), dev_ctx, dx);
-    } else {
-      dy->mutable_data<T>(ctx.GetPlace());
-      framework::TensorCopy(
-          *dout, ctx.GetPlace(), dev_ctx, dy);
+      if (dx) {
+        framework::TensorCopy(cpu_dx, dev_ctx.GetPlace(), dev_ctx, dx);
+      }
+      if (dy) {
+        framework::TensorCopy(cpu_dy, dev_ctx.GetPlace(), dev_ctx, dy);
+      }
     }
   }
 };

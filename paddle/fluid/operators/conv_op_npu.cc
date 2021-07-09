@@ -69,9 +69,7 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
 
     Tensor input_tensor, output_tensor;
     input_tensor.ShareDataWith(*input);
-    input_tensor.Resize(input->dims());
     output_tensor.ShareDataWith(*output);
-    output_tensor.Resize(output->dims());
     if (channel_last) {
       input_tensor.set_layout(DataLayout::kNHWC);
       output_tensor.set_layout(DataLayout::kNHWC);
@@ -144,9 +142,7 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
 
     Tensor input_tensor, output_grad_tensor;
     input_tensor.ShareDataWith(*input);
-    input_tensor.Resize(input->dims());
     output_grad_tensor.ShareDataWith(*output_grad);
-    output_grad_tensor.Resize(output_grad->dims());
     if (channel_last) {
       data_format_str = "NHWC";
       input_tensor.set_layout(DataLayout::kNHWC);
@@ -169,7 +165,6 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
 
       // Tensor filter_grad_tensor;
       // filter_grad_tensor.ShareDataWith(*filter_grad);
-      // filter_grad_tensor.Resize(filter_grad->dims());
       // if (channel_last) {
       //   filter_grad_tensor.set_layout(DataLayout::kNHWC);
       // }
@@ -189,7 +184,6 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
 
       Tensor input_grad_tensor;
       input_grad_tensor.ShareDataWith(*input_grad);
-      input_grad_tensor.Resize(input_grad->dims());
       if (channel_last) {
         input_grad_tensor.set_layout(DataLayout::kNHWC);
       }

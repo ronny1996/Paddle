@@ -29,15 +29,12 @@ class NPUBatchNormOpKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext &ctx) const override {
     auto &dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
-    float epsilon = ctx.Attr<float>("epsilon");
-    float momentum = ctx.Attr<float>("momentum");
+    const float epsilon = ctx.Attr<float>("epsilon");
+    const float momentum = ctx.Attr<float>("momentum");
     const bool is_test = ctx.Attr<bool>("is_test");
     const bool use_global_stats = ctx.Attr<bool>("use_global_stats");
     const bool trainable_stats = ctx.Attr<bool>("trainable_statistics");
-    const std::string data_layout_str = ctx.Attr<std::string>("data_layout");
-    const DataLayout data_layout =
-        framework::StringToDataLayout(data_layout_str);
-    bool test_mode = is_test && (!trainable_stats);
+    const std::string data_layout = ctx.Attr<std::string>("data_layout");
 
     const auto *x = ctx.Input<Tensor>("X");
     const auto *scale = ctx.Input<Tensor>("Scale");
@@ -45,19 +42,27 @@ class NPUBatchNormOpKernel : public framework::OpKernel<T> {
 
     auto *y = ctx.Output<Tensor>("Y");
     y->mutable_data<T>(ctx.GetPlace());
+    const bool test_mode = is_test && (!trainable_stats);
 
-    std::string data_format_str = ctx.Attr<std::string>("data_layout");
+    Tensor x_tensor, y_tesnor;
+    x_tensor.ShareDataWith(*x);
+    y_tesnor.ShareDataWith(*y);
+    if (data_layout == "NHWC") {
+      x_tensor.set_layout(DataLayout::kNHWC);
+      y_tesnor.set_layout(DataLayout::kNHWC);
+    }
+
     bool training = !test_mode && !use_global_stats;
     if (!training) {
       const auto *est_mean = ctx.Input<Tensor>("Mean");
       const auto *est_var = ctx.Input<Tensor>("Variance");
 
       const auto &runner =
-          NpuOpRunner("BatchNorm", {*x, *scale, *bias, *est_mean, *est_var},
-                      {*y, *est_mean, *est_var, *est_mean, *est_var},
+          NpuOpRunner("BatchNorm", {x_tensor, *scale, *bias, *est_mean, *est_var},
+                      {y_tesnor, *est_mean, *est_var, *est_mean, *est_var},
                       {{"epsilon", epsilon},
                        {"is_training", training},
-                       {"data_format", data_format_str}});
+                       {"data_format", data_layout}});
       auto stream = dev_ctx.stream();
       runner.Run(stream);
     } else {
@@ -77,11 +82,11 @@ class NPUBatchNormOpKernel : public framework::OpKernel<T> {
       variance_tmp.mutable_data<float>(variance_out->dims(), ctx.GetPlace());
 
       const auto &runner = NpuOpRunner(
-          "BatchNorm", {*x, *scale, *bias},
-          {*y, mean_tmp, variance_tmp, *saved_mean, *saved_variance},
+          "BatchNorm", {x_tensor, *scale, *bias},
+          {y_tesnor, mean_tmp, variance_tmp, *saved_mean, *saved_variance},
           {{"epsilon", epsilon},
            {"is_training", training},
-           {"data_format", data_format_str}});
+           {"data_format", data_layout}});
       auto stream = dev_ctx.stream();
       runner.Run(stream);
       // Ascend can't output the estimated mean and variance
@@ -120,7 +125,7 @@ class NPUBatchNormGradOpKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext &ctx) const override {
     auto &dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
-    float epsilon = ctx.Attr<float>("epsilon");
+    const float epsilon = ctx.Attr<float>("epsilon");
     const std::string data_layout = ctx.Attr<std::string>("data_layout");
     bool use_global_stats = ctx.Attr<bool>("use_global_stats");
 
@@ -141,9 +146,18 @@ class NPUBatchNormGradOpKernel : public framework::OpKernel<T> {
     const bool is_test = ctx.Attr<bool>("is_test");
     use_global_stats = is_test || use_global_stats;
 
+    Tensor x_tensor, y_grad_tensor, x_grad_tensor;
+    x_tensor.ShareDataWith(*x);
+    y_grad_tensor.ShareDataWith(*y_grad);
+    x_grad_tensor.ShareDataWith(*x_grad);
+    if (data_layout == "NHWC") {
+      x_tensor.set_layout(DataLayout::kNHWC);
+      y_grad_tensor.set_layout(DataLayout::kNHWC);
+      x_grad_tensor.set_layout(DataLayout::kNHWC);
+    }
     const auto &runner = NpuOpRunner(
-        "BatchNormGrad", {*y_grad, *x, *scale, *saved_mean, *saved_variance},
-        {*x_grad, *scale_grad, *bias_grad, *saved_mean,
+        "BatchNormGrad", {y_grad_tensor, x_tensor, *scale, *saved_mean, *saved_variance},
+        {x_grad_tensor, *scale_grad, *bias_grad, *saved_mean,
          *saved_variance},  // segment fault if no reserve_space_3 and
                             // reserve_space_4
         {{"epsilon", epsilon},

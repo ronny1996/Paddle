@@ -24,7 +24,7 @@ namespace operators {
 using Tensor = framework::Tensor;
 
 template <typename T>
-void NpuBroadcase(const platform::NPUDeviceContext& dev_ctx, const Tensor* src, int axis, const framework::DDim& dst_dims, Tensor* transformed_src) {
+void NpuBroadcast(const platform::NPUDeviceContext& dev_ctx, const Tensor* src, int axis, const framework::DDim& dst_dims, Tensor* transformed_src) {
   auto stream = dev_ctx.stream();
 
   // 1. expand the axis with dim 1 
@@ -117,8 +117,8 @@ void NpuElementWiseOpBroadcast(const platform::NPUDeviceContext& dev_ctx, const 
   }
 
   auto dst_dims = framework::make_ddim(dst_dims_vec);
-  NpuBroadcase<T>(dev_ctx, x, x_axis, dst_dims, transformed_x);
-  NpuBroadcase<T>(dev_ctx, y, y_axis, dst_dims, transformed_y);
+  NpuBroadcast<T>(dev_ctx, x, x_axis, dst_dims, transformed_x);
+  NpuBroadcast<T>(dev_ctx, y, y_axis, dst_dims, transformed_y);
 
 #if 0
   auto stream = dev_ctx.stream();
@@ -222,7 +222,7 @@ void NpuElementWiseOpBroadcast(const platform::NPUDeviceContext& dev_ctx, const 
   framework::TensorCopy(tmp_y, dev_ctx.GetPlace(), transformed_y);
 #endif
 }
-#if 1
+#if 0
 template <typename T>
 void NpuBroadcastTo(const framework::ExecutionContext& ctx, const Tensor* dst,
                     const Tensor* src, int axis, Tensor* transformed_src) {

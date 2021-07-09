@@ -89,7 +89,7 @@ class NPUReduceMeanGradOpKernel : public framework::OpKernel<T> {
             .stream();
     runner.Run(stream);
 
-    Tensor transformed_out_grad;
+    Tensor transformed_input_grad, transformed_out_grad;
     Tensor tmp_output_grad;
     auto tmp_output_dims_vec = input_dims_vec;
     for (auto d : reduce_dims) {
@@ -97,19 +97,20 @@ class NPUReduceMeanGradOpKernel : public framework::OpKernel<T> {
     }
     tmp_output_grad.ShareDataWith(*output_grad);
     tmp_output_grad.Resize(framework::make_ddim(tmp_output_dims_vec));
-    NpuBroadcastTo<T>(ctx, input_grad, &tmp_output_grad, 0,
-                      &transformed_out_grad);
-
+    // NpuBroadcastTo<T>(ctx, input_grad, &tmp_output_grad, 0,
+    //                   &transformed_out_grad);
+    auto& dev_ctx = ctx.template device_context<paddle::platform::NPUDeviceContext>();
+    NpuElementWiseOpBroadcast<T>(dev_ctx, input_grad, &tmp_output_grad, 0, &transformed_input_grad, &transformed_out_grad);
     const auto& runner2 = NpuOpRunner(
-        "Mul", {*input_grad, transformed_out_grad}, {*input_grad}, {});
+        "Mul", {transformed_input_grad, transformed_out_grad}, {*input_grad}, {});
     runner2.Run(stream);
   }
 };
 }  // namespace operators
 }  // namespace paddle
 
+namespace ops = paddle::operators;
 REGISTER_OP_NPU_KERNEL(reduce_mean,
-                       paddle::operators::NPUReduceMeanOpKernel<float>,
-                       paddle::operators::NPUReduceMeanOpKernel<double>);
+                       ops::NPUReduceMeanOpKernel<float>);
 REGISTER_OP_NPU_KERNEL(reduce_mean_grad,
-                       paddle::operators::NPUReduceMeanGradOpKernel<float>);
+                       ops::NPUReduceMeanGradOpKernel<float>);

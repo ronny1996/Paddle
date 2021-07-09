@@ -22,13 +22,13 @@ import paddle
 import paddle.fluid.core as core
 import paddle.fluid as fluid
 from paddle.fluid.op import Operator
-from op_test import OpTest, convert_float_to_uint16, get_numeric_gradient
-from paddle.fluid.tests.unittests.testsuite import create_op
+from op_test import OpTest
 from paddle.fluid import Program, program_guard
 
-from test_batch_norm_op import _reference_testing, _cal_mean_variance, _reference_training, _reference_grad, create_or_get_tensor, set_output_grad
+from test_batch_norm_op import _reference_testing, _cal_mean_variance, _reference_training, _reference_grad
 
 paddle.enable_static()
+
 
 @unittest.skipIf(not paddle.is_compiled_with_npu(),
                  "core is not compiled with NPU")
@@ -40,7 +40,7 @@ class TestBatchNormOpTraining(unittest.TestCase):
         self.set_npu()
         self.use_mkldnn = False
         self.fuse_with_relu = False
-        self.data_formats = ["NCHW"]
+        self.data_formats = ["NCHW", "NHWC"]
         self.momentum = 0.9
         self.use_momentum_variable = False
         self.epsilon = 0.00001
@@ -82,7 +82,7 @@ class TestBatchNormOpTraining(unittest.TestCase):
             mean = mean * (1. - mom) + mom * mean_pre
             variance = variance * (1. - mom) + mom * variance_pre
         return mean, variance
-      
+
     def test_forward_backward(self):
         def test_with_place(place, data_layout, shape):
             # attr
@@ -203,6 +203,7 @@ class TestBatchNormOpTraining(unittest.TestCase):
     def init_kernel_type(self):
         pass
 
+
 @unittest.skipIf(not paddle.is_compiled_with_npu(),
                  "core is not compiled with NPU")
 class TestBatchNormOpInference(unittest.TestCase):
@@ -210,7 +211,7 @@ class TestBatchNormOpInference(unittest.TestCase):
         self.dtype = np.float32
         self.fuse_with_relu = False
         self.init_kernel_type()
-        self.data_formats = ["NCHW"]
+        self.data_formats = ["NCHW", "NHWC"]
 
     def __assert_close(self, tensor, np_array, msg, atol=1e-4):
         self.assertTrue(np.allclose(np.array(tensor), np_array, atol=atol), msg)
@@ -236,12 +237,10 @@ class TestBatchNormOpInference(unittest.TestCase):
         bias = np.random.random_sample(scale_shape).astype(np.float32)
         mean = np.zeros(scale_shape).astype(np.float32)
         variance = np.ones(scale_shape).astype(np.float32)
-        y = _reference_testing(x, scale, bias, mean, variance,
-                                   epsilon, data_layout).astype(dtype)
+        y = _reference_testing(x, scale, bias, mean, variance, epsilon,
+                               data_layout).astype(dtype)
         var_dict = locals()
-        var_names = [
-            "x", "scale", "bias", "mean", "variance", "y"
-        ]
+        var_names = ["x", "scale", "bias", "mean", "variance", "y"]
         ground_truth = {name: var_dict[name] for name in var_names}
         ground_truth["saved_mean"] = mean
         ground_truth["saved_variance"] = variance
@@ -251,9 +250,7 @@ class TestBatchNormOpInference(unittest.TestCase):
             block = program.global_block()
             for name in ground_truth:
                 block.create_var(
-                    name=name,
-                    dtype="float32",
-                    shape=ground_truth[name].shape)
+                    name=name, dtype="float32", shape=ground_truth[name].shape)
             inputs = {
                 "X": block.var("x"),
                 "Scale": block.var("scale"),
@@ -270,7 +267,7 @@ class TestBatchNormOpInference(unittest.TestCase):
             }
             outputs = {
                 "Y": block.var("y"),
-                "MeanOut": block.var("mean"),          # share memory
+                "MeanOut": block.var("mean"),  # share memory
                 "VarianceOut": block.var("variance"),  # share memory
                 "SavedMean": block.var("saved_mean"),
                 "SavedVariance": block.var("saved_variance")
@@ -278,27 +275,24 @@ class TestBatchNormOpInference(unittest.TestCase):
             block.create_var(name="reserve_space", dtype='float32')
             outputs["ReserveSpace"] = block.var('reserve_space')
             bn_op = block.append_op(
-                type="batch_norm",
-                inputs=inputs,
-                outputs=outputs,
-                attrs=attrs)
+                type="batch_norm", inputs=inputs, outputs=outputs, attrs=attrs)
 
             program._sync_with_cpp()
 
             exe = fluid.Executor(place)
-            out = exe.run(program,
-                            feed={
-                                name : ground_truth[name] for name in ["x", "scale", "bias", "mean", "variance"]
-                            },
-                            fetch_list=["y"])
+            out = exe.run(
+                program,
+                feed={
+                    name: ground_truth[name]
+                    for name in ["x", "scale", "bias", "mean", "variance"]
+                },
+                fetch_list=["y"])
             self.__assert_close(var_dict["y"], out[0], "y", atol=1e-3)
 
     def test_check_output(self):
         place = core.NPUPlace(0)
-        # place = core.CPUPlace()
         for data_format in self.data_formats:
-            self.check_with_place(place, data_format, self.dtype,
-                                      [2, 3, 4, 5])
+            self.check_with_place(place, data_format, self.dtype, [2, 3, 4, 5])
             self.check_with_place(place, data_format, self.dtype, [2, 3])
 
     def init_kernel_type(self):

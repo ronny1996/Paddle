@@ -38,34 +38,54 @@ class NPUPoolOpKernel : public framework::OpKernel<T> {
     std::vector<int> strides = ctx.Attr<std::vector<int>>("strides");
     std::vector<int> paddings = ctx.Attr<std::vector<int>>("paddings");
     std::string data_format = ctx.Attr<std::string>("data_format");
+
+    bool global_pooling = ctx.Attr<bool>("global_pooling");
+    bool ceil_mode = ctx.Attr<bool>("ceil_mode");
     bool exclusive = ctx.Attr<bool>("exclusive");
     bool adaptive = ctx.Attr<bool>("adaptive");
-    bool global_pooling = ctx.Attr<bool>("global_pooling");
     std::string padding_algorithm = ctx.Attr<std::string>("padding_algorithm");
 
     const bool channel_last = data_format == "NHWC";
 
     auto in_x_dims = in_x->dims();
     framework::DDim data_dims;
+    Tensor in_x_tensor, out_tensor;
+    in_x_tensor.ShareDataWith(*in_x);
+    out_tensor.ShareDataWith(*out);
+    std::vector<int> ksize_vec(4, 1);
+    std::vector<int> strides_vec(4, 1);
     if (channel_last) {
       data_dims = framework::slice_ddim(in_x_dims, 1, in_x_dims.size() - 1);
+      ksize_vec[1] = ksize[0];
+      ksize_vec[2] = ksize[1];
+      strides_vec[1] = strides[0];
+      strides_vec[2] = strides[1];
+      in_x_tensor.set_layout(DataLayout::kNHWC);
+      out_tensor.set_layout(DataLayout::kNHWC);
     } else {
       data_dims = framework::slice_ddim(in_x_dims, 2, in_x_dims.size());
+      ksize_vec[2] = ksize[0];
+      ksize_vec[3] = ksize[1];
+      strides_vec[2] = strides[0];
+      strides_vec[3] = strides[1];
     }
-
     UpdatePadding(&paddings, global_pooling, adaptive, padding_algorithm,
                   data_dims, strides, ksize);
-    int64_t pooling_mode = (pooling_type == "max" ? 0 : 1);  // 0: max, 1: avg
+
+    std::string pooling_mode = "AvgPoolV2";
+    if (pooling_type == "max") {
+      pooling_mode = "MaxPoolV3";
+    }
     const auto &runner = NpuOpRunner(
-        "Pooling", {*in_x}, {*out},
-        {{"mode", pooling_mode},
-         {"global_pooling", global_pooling},
-         {"window", ksize},
-         {"stride", strides},
-         {"pad", paddings},
-         {"dilation", std::vector<int64_t>({1, 1, 1, 1})},
-         {"ceil_mode", static_cast<int64_t>(1)},  // 1: floor, 0: ceil
-         {"data_format", data_format}});
+      pooling_mode, {in_x_tensor}, {out_tensor},
+      {{"ksize", ksize_vec},
+      {"strides", strides_vec},
+      {"padding_mode", std::string("CALCULATED")},
+      {"pads", paddings},
+      {"data_format", data_format},
+      {"global_pooling", global_pooling},
+      {"ceil_mode", ceil_mode},
+      {"exclusive", exclusive}});
     auto stream = dev_ctx.stream();
     runner.Run(stream);
   }
@@ -86,6 +106,7 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
     std::vector<int> ksize = ctx.Attr<std::vector<int>>("ksize");
     std::vector<int> strides = ctx.Attr<std::vector<int>>("strides");
     std::vector<int> paddings = ctx.Attr<std::vector<int>>("paddings");
+    bool ceil_mode = ctx.Attr<bool>("ceil_mode");
     bool exclusive = ctx.Attr<bool>("exclusive");
     bool adaptive = ctx.Attr<bool>("adaptive");
     std::string data_format = ctx.Attr<std::string>("data_format");
@@ -99,12 +120,21 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
     framework::DDim data_dims;
     std::vector<int> ksize_vec(4, 1);
     std::vector<int> strides_vec(4, 1);
+    Tensor in_x_tensor, out_tensor, out_grad_tensor, in_x_grad_tensor;
+    in_x_tensor.ShareDataWith(*in_x);
+    out_tensor.ShareDataWith(*out);
+    out_grad_tensor.ShareDataWith(*out_grad);
+    in_x_grad_tensor.ShareDataWith(*in_x_grad);
     if (channel_last) {
       data_dims = framework::slice_ddim(in_x_dims, 1, in_x_dims.size() - 1);
       ksize_vec[1] = ksize[0];
       ksize_vec[2] = ksize[1];
       strides_vec[1] = strides[0];
       strides_vec[2] = strides[1];
+      in_x_tensor.set_layout(DataLayout::kNHWC);
+      out_tensor.set_layout(DataLayout::kNHWC);
+      out_grad_tensor.set_layout(DataLayout::kNHWC);
+      in_x_grad_tensor.set_layout(DataLayout::kNHWC);
     } else {
       data_dims = framework::slice_ddim(in_x_dims, 2, in_x_dims.size());
       ksize_vec[2] = ksize[0];
@@ -115,18 +145,18 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
     UpdatePadding(&paddings, global_pooling, adaptive, padding_algorithm,
                   data_dims, strides, ksize);
 
-    auto stream = dev_ctx.stream();
     if (pooling_type == "max") {
       const auto &runner =
-          NpuOpRunner("MaxPoolV3Grad", {*in_x, *out, *out_grad}, {*in_x_grad},
+          NpuOpRunner("MaxPoolV3Grad", {in_x_tensor, out_tensor, out_grad_tensor}, {in_x_grad_tensor},
                       {{"ksize", ksize_vec},
                        {"strides", strides_vec},
                        {"padding_mode", std::string("CALCULATED")},
                        {"pads", paddings},
                        {"data_format", data_format},
                        {"global_pooling", global_pooling},
-                       {"ceil_mode", false}});  // 0: floor, 1: ceil
-      runner.Run(stream);
+                       {"ceil_mode", ceil_mode},
+                       {"exclusive", exclusive}});  // 0: floor, 1: ceil
+      runner.Run(dev_ctx.stream());
     } else if (pooling_type == "avg") {
       // const auto &runner =
       //     NpuOpRunner("AvgPoolV2GradD", {*out_grad}, {*in_x_grad},
@@ -139,7 +169,7 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
       //                  {"global_pooling", global_pooling},
       //                  {"ceil_mode", false},  // 0: floor, 1: ceil
       //                  {"exclusive", exclusive}});
-      // runner.Run(stream);
+      // runner.Run(dev_ctx.stream());
 
       auto cpu_dev_ctx = platform::CPUDeviceContext(platform::CPUPlace());
       Tensor cpu_in_x, cpu_out, cpu_in_x_grad, cpu_out_grad;
@@ -165,8 +195,8 @@ class NPUPoolGradOpKernel : public framework::OpKernel<T> {
 }  // namespace operators
 }  // namespace paddle
 
-REGISTER_OP_NPU_KERNEL(pool2d, paddle::operators::NPUPoolOpKernel<float>,
-                       paddle::operators::NPUPoolOpKernel<double>);
+namespace ops = paddle::operators;
+namespace plat = paddle::platform;
+REGISTER_OP_NPU_KERNEL(pool2d, ops::NPUPoolOpKernel<float>);
 REGISTER_OP_NPU_KERNEL(pool2d_grad,
-                       paddle::operators::NPUPoolGradOpKernel<float>,
-                       paddle::operators::NPUPoolGradOpKernel<double>);
+                       ops::NPUPoolGradOpKernel<float>);

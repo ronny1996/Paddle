@@ -147,11 +147,15 @@ class TestConv2DOpCase3(TestConv2DOp):
 @unittest.skipIf(not paddle.is_compiled_with_npu(),
                  "core is not compiled with NPU")
 class TestConv2DOpCase4(TestConv2DOpCase3):
-    def init_data_format(self):
-        self.data_format = "NHWC"
-        
     def init_group(self):
         self.groups = 3
+
+@unittest.skipIf(not paddle.is_compiled_with_npu(),
+                 "core is not compiled with NPU")
+class TestConv2DOpCase5(TestConv2DOpCase4):
+    def init_dilation(self):
+        self.dilations = [2, 2]
+        
 
 if __name__ == "__main__":
     unittest.main()

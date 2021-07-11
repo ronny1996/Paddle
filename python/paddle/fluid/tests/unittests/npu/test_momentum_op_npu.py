@@ -35,15 +35,14 @@ class TestMomentumOp1(OpTest):
     def setUp(self):
         self.set_npu()
         self.op_type = "momentum"
-        self.dtype = np.float32
         self.init_dtype()
+        self.init_case()
 
-        param = np.random.random((123, 321)).astype(self.dtype)
-        grad = np.random.random((123, 321)).astype(self.dtype)
-        velocity = np.zeros((123, 321)).astype(self.dtype)
+        param = np.random.random(self.shape).astype(self.dtype)
+        grad = np.random.random(self.shape).astype(self.dtype)
+        velocity = np.zeros(self.shape).astype(self.dtype)
         learning_rate = np.array([0.001]).astype(np.float32)
         mu = 0.0001
-        use_nesterov = False
 
         self.inputs = {
             'Param': param,
@@ -52,62 +51,32 @@ class TestMomentumOp1(OpTest):
             'LearningRate': learning_rate
         }
 
-        self.attrs = {'mu': mu}
+        self.attrs = {'mu': mu, 'use_nesterov': self.use_nesterov}
 
         param_out, velocity_out = calculate_momentum_by_numpy(
             param=param,
             grad=grad,
             mu=mu,
             velocity=velocity,
-            use_nesterov=use_nesterov,
+            use_nesterov=self.use_nesterov,
             learning_rate=learning_rate)
 
         self.outputs = {'ParamOut': param_out, 'VelocityOut': velocity_out}
+
+    def init_case(self):
+        self.shape = (123, 321)
+        self.use_nesterov = False
 
     def init_dtype(self):
-        pass
+        self.dtype = np.float32
 
     def test_check_output(self):
         self.check_output_with_place(core.NPUPlace(0), check_dygraph=False)
 
-class TestMomentumOp2(OpTest):
-    '''Test Momentum with default values for attributes
-    '''
-    def set_npu(self):
-        self.__class__.use_npu = True
-
-    def setUp(self):
-        self.set_npu()
-        self.op_type = "momentum"
-
-        param = np.random.random((123, 321)).astype("float32")
-        grad = np.random.random((123, 321)).astype("float32")
-        velocity = np.zeros((123, 321)).astype("float32")
-        learning_rate = np.array([0.001]).astype("float32")
-        mu = 0.0001
-        use_nesterov = True
-
-        self.inputs = {
-            'Param': param,
-            'Grad': grad,
-            'Velocity': velocity,
-            'LearningRate': learning_rate
-        }
-
-        self.attrs = {'mu': mu, 'use_nesterov': use_nesterov}
-
-        param_out, velocity_out = calculate_momentum_by_numpy(
-            param=param,
-            grad=grad,
-            mu=mu,
-            velocity=velocity,
-            use_nesterov=use_nesterov,
-            learning_rate=learning_rate)
-
-        self.outputs = {'ParamOut': param_out, 'VelocityOut': velocity_out}
-
-    def test_check_output(self):
-        self.check_output_with_place(core.NPUPlace(0), check_dygraph=False)
+class TestMomentumOp2(TestMomentumOp1):
+    def init_case(self):
+        self.shape = (123, 321)
+        self.use_nesterov = True
 
 if __name__ == "__main__":
     unittest.main()

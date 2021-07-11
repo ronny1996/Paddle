@@ -32,20 +32,21 @@ class NPUMomentumOpKernel : public framework::OpKernel<T> {
     auto velocity_out = ctx.Output<framework::Tensor>("VelocityOut");
     param_out->mutable_data<T>(ctx.GetPlace());
     velocity_out->mutable_data<T>(ctx.GetPlace());
-    auto lr = learning_rate->data<T>();
 
     T mu = static_cast<T>(ctx.Attr<float>("mu"));
     bool use_nesterov = ctx.Attr<bool>("use_nesterov");
 
     Tensor mu_tensor;
     mu_tensor.mutable_data<T>(framework::make_ddim({1}), ctx.GetPlace());
-    framework::TensorFromVector<T>({mu}, dev_ctx, &mu_tensor);
-
+    FillNpuTensorWithConstant<T>(&mu_tensor, mu);
+    framework::TensorCopy(*param, ctx.GetPlace(), dev_ctx, param_out);
+    framework::TensorCopy(*velocity, ctx.GetPlace(), dev_ctx, velocity_out);
     const auto& runner = NpuOpRunner(
-        "ApplyMomentum", {*param, *velocity, *learning_rate, *grad, mu_tensor},
+        "ApplyMomentum", {*param_out, *velocity_out, *learning_rate, *grad, mu_tensor},
         {*param_out}, {{"use_nesterov", use_nesterov}});
     auto stream = dev_ctx.stream();
     runner.Run(stream);
+
   }
 };
 }  // namespace operators

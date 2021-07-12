@@ -1,303 +1,176 @@
-#   Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+/* Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
 
-from __future__ import print_function
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-import unittest
-import numpy as np
-import sys
-sys.path.append("..")
-import paddle
-import paddle.fluid.core as core
-import paddle.fluid as fluid
-from paddle.fluid.op import Operator
-from op_test import OpTest
-from paddle.fluid import Program, program_guard
+    http://www.apache.org/licenses/LICENSE-2.0
 
-from test_batch_norm_op import _reference_testing, _cal_mean_variance, _reference_training, _reference_grad
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License. */
+#include "paddle/fluid/operators/batch_norm_op.h"
 
-paddle.enable_static()
+#include "paddle/fluid/framework/fleet/ascend_wrapper.h"
+#include "paddle/fluid/framework/generator.h"
+#include "paddle/fluid/framework/op_registry.h"
+#include "paddle/fluid/framework/operator.h"
 
+#include "paddle/fluid/operators/fill_constant_op.h"
+#include "paddle/fluid/operators/npu_op_runner.h"
 
-@unittest.skipIf(not paddle.is_compiled_with_npu(),
-                 "core is not compiled with NPU")
-class TestBatchNormOpTraining(unittest.TestCase):
-    def set_npu(self):
-        self.__class__.use_npu = True
+namespace paddle {
+namespace operators {
 
-    def setUp(self):
-        self.set_npu()
-        self.use_mkldnn = False
-        self.fuse_with_relu = False
-        self.data_formats = ["NCHW", "NHWC"]
-        self.momentum = 0.9
-        self.use_momentum_variable = False
-        self.epsilon = 0.00001
-        self.init_kernel_type()
-        self.init_test_case()
+template <typename T>
+class NPUBatchNormOpKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext &ctx) const override {
+    auto &dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
+    const float epsilon = ctx.Attr<float>("epsilon");
+    const float momentum = ctx.Attr<float>("momentum");
+    const bool is_test = ctx.Attr<bool>("is_test");
+    const bool use_global_stats = ctx.Attr<bool>("use_global_stats");
+    const bool trainable_stats = ctx.Attr<bool>("trainable_statistics");
+    const std::string data_layout = ctx.Attr<std::string>("data_layout");
 
-    def init_test_case(self):
-        self.use_global_stats = False
-        self.no_grad_set = set()
-        self.fetch_list = [
-            "y", 'mean', 'variance', 'saved_mean', 'saved_variance', 'x@GRAD',
-            'scale@GRAD', 'bias@GRAD'
-        ]
+    const auto *x = ctx.Input<Tensor>("X");
+    const auto *scale = ctx.Input<Tensor>("Scale");
+    const auto *bias = ctx.Input<Tensor>("Bias");
 
-    def __assert_close(self, tensor, np_array, msg, atol=1e-4):
-        np.allclose(np.array(tensor), np_array, atol=atol)
+    auto *y = ctx.Output<Tensor>("Y");
+    y->mutable_data<T>(ctx.GetPlace());
+    const bool test_mode = is_test && (!trainable_stats);
 
-    def ref_forward_backward(self, x, y_grad, scale, bias, mean, variance,
-                             epsilon, momentum, shape, data_layout):
-        # run forward
-        y, saved_mean, var_ref = _reference_training(x, scale, bias, epsilon,
-                                                     data_layout)
-        mean_out = saved_mean * (1. - momentum) + momentum * mean
-        variance_out = var_ref * (1. - momentum) + momentum * variance
-        saved_variance = 1. / np.sqrt(var_ref + epsilon)
-        # run backward
-        x_grad, scale_grad, bias_grad = _reference_grad(
-            x, y_grad, scale, saved_mean, var_ref, epsilon, data_layout)
+    Tensor x_tensor, y_tesnor;
+    x_tensor.ShareDataWith(*x);
+    y_tesnor.ShareDataWith(*y);
+    if (data_layout == "NHWC") {
+      x_tensor.set_layout(DataLayout::kNHWC);
+      y_tesnor.set_layout(DataLayout::kNHWC);
+    }
 
-        return y, mean_out, variance_out, saved_mean, saved_variance, x_grad, scale_grad, bias_grad
+    bool training = !test_mode && !use_global_stats;
+    if (!training) {
+      const auto *est_mean = ctx.Input<Tensor>("Mean");
+      const auto *est_var = ctx.Input<Tensor>("Variance");
 
-    def set_mean_variance(self, scale_shape, x, data_layout):
-        mean, variance = _cal_mean_variance(x, self.epsilon, data_layout)
-        mean_pre = np.zeros(scale_shape).astype(np.float32)
-        variance_pre = np.ones(scale_shape).astype(np.float32)
-        # computing global mean/variance for one step
-        if self.use_global_stats:
-            mom = self.momentum
-            mean = mean * (1. - mom) + mom * mean_pre
-            variance = variance * (1. - mom) + mom * variance_pre
-        return mean, variance
+      const auto &runner = NpuOpRunner(
+          "BatchNorm", {x_tensor, *scale, *bias, *est_mean, *est_var},
+          {y_tesnor, *est_mean, *est_var, *est_mean, *est_var},
+          {{"epsilon", epsilon},
+           {"is_training", training},
+           {"data_format", data_layout}});
+      auto stream = dev_ctx.stream();
+      runner.Run(stream);
+    } else {
+      auto *mean_out = ctx.Output<Tensor>("MeanOut");
+      auto *variance_out = ctx.Output<Tensor>("VarianceOut");
+      mean_out->mutable_data<T>(ctx.GetPlace());
+      variance_out->mutable_data<T>(ctx.GetPlace());
 
-    def test_forward_backward(self):
-        def test_with_place(place, data_layout, shape):
-            # attr
-            epsilon = self.epsilon
-            momentum = self.momentum
-            if data_layout == "NCHW":
-                n, c, h, w = shape[0], shape[1], shape[2], shape[3]
-            else:
-                n, h, w, c = shape[0], shape[1], shape[2], shape[3]
-            scale_shape = [c]
+      auto *saved_mean = ctx.Output<Tensor>("SavedMean");
+      auto *saved_variance = ctx.Output<Tensor>("SavedVariance");
+      saved_mean->mutable_data<T>(ctx.GetPlace());
+      saved_variance->mutable_data<T>(ctx.GetPlace());
 
-            np.random.seed(123)
-            x = np.random.random_sample(shape).astype(np.float32)
-            scale = np.random.random_sample(scale_shape).astype(np.float32)
-            bias = np.random.random_sample(scale_shape).astype(np.float32)
-            mean, variance = self.set_mean_variance(scale_shape, x, data_layout)
-            y_grad = np.random.random_sample(shape).astype(np.float32)
-            momentum_var = np.array([momentum]).astype(np.float32)
+      framework::Tensor mean_tmp;
+      mean_tmp.mutable_data<float>(mean_out->dims(), ctx.GetPlace());
+      framework::Tensor variance_tmp;
+      variance_tmp.mutable_data<float>(variance_out->dims(), ctx.GetPlace());
 
-            y, mean_out, variance_out, saved_mean, saved_variance, x_grad, scale_grad, bias_grad = self.ref_forward_backward(
-                x, y_grad, scale, bias, mean, variance, epsilon, momentum,
-                shape, data_layout)
+      const auto &runner = NpuOpRunner(
+          "BatchNorm", {x_tensor, *scale, *bias},
+          {y_tesnor, mean_tmp, variance_tmp, *saved_mean, *saved_variance},
+          {{"epsilon", epsilon},
+           {"is_training", training},
+           {"data_format", data_layout}});
+      auto stream = dev_ctx.stream();
+      runner.Run(stream);
+      // Ascend can't output the estimated mean and variance
+      framework::Tensor this_factor_tensor;
+      this_factor_tensor.mutable_data<float>(framework::make_ddim({1}),
+                                             ctx.GetPlace());
+      framework::TensorFromVector<float>({static_cast<float>(1. - momentum)},
+                                         dev_ctx, &this_factor_tensor);
+      framework::Tensor momentum_tensor;
+      momentum_tensor.mutable_data<float>(framework::make_ddim({1}),
+                                          ctx.GetPlace());
+      framework::TensorFromVector<float>({static_cast<float>(momentum)},
+                                         dev_ctx, &momentum_tensor);
+      framework::Tensor ones_tensor;
+      ones_tensor.mutable_data<float>(mean_out->dims(), ctx.GetPlace());
+      framework::TensorFromVector<float>(
+          std::vector<float>(framework::product(mean_out->dims()), 1.0f),
+          dev_ctx, &ones_tensor);
 
-            var_dict = locals()
-            var_dict['y@GRAD'] = y_grad
-            var_dict['x@GRAD'] = x_grad
-            var_dict['scale@GRAD'] = scale_grad
-            var_dict['bias@GRAD'] = bias_grad
+      const auto &runner1 = NpuOpRunner("AddMatMatElements",
+                                        {*mean_out, *saved_mean, ones_tensor,
+                                         momentum_tensor, this_factor_tensor},
+                                        {*mean_out}, {});
+      runner1.Run(stream);
+      const auto &runner2 = NpuOpRunner(
+          "AddMatMatElements", {*variance_out, *saved_variance, ones_tensor,
+                                momentum_tensor, this_factor_tensor},
+          {*variance_out}, {});
+      runner2.Run(stream);
+    }
+  }
+};
 
-            var_names = [
-                'x', 'scale', 'bias', 'mean', 'variance', "y", 'saved_mean',
-                'saved_variance', 'momentum_var'
-            ]
-            ground_truth = {name: var_dict[name] for name in var_names}
+template <typename T>
+class NPUBatchNormGradOpKernel : public framework::OpKernel<T> {
+ public:
+  void Compute(const framework::ExecutionContext &ctx) const override {
+    auto &dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
+    const float epsilon = ctx.Attr<float>("epsilon");
+    const std::string data_layout = ctx.Attr<std::string>("data_layout");
+    bool use_global_stats = ctx.Attr<bool>("use_global_stats");
 
-            program = fluid.Program()
-            with fluid.program_guard(program):
-                block = program.global_block()
-                for name in ground_truth:
-                    block.create_var(
-                        name=name,
-                        dtype='float32',
-                        shape=ground_truth[name].shape)
-                inputs = {
-                    "X": block.var('x'),
-                    "Scale": block.var('scale'),
-                    "Bias": block.var('bias'),
-                    "Mean": block.var('mean'),
-                    "Variance": block.var('variance')
-                }
-                attrs = {
-                    "epsilon": epsilon,
-                    "is_test": False,
-                    "data_layout": data_layout,
-                    "use_mkldnn": self.use_mkldnn,
-                    "fuse_with_relu": self.fuse_with_relu,
-                    "use_global_stats": self.use_global_stats
-                }
-                if self.use_momentum_variable:
-                    inputs['MomentumTensor'] = block.var('momentum_var')
-                else:
-                    attrs['momentum'] = momentum
+    const auto *y_grad = ctx.Input<Tensor>(framework::GradVarName("Y"));
+    const auto *x = ctx.Input<Tensor>("X");
+    const auto *scale = ctx.Input<Tensor>("Scale");
+    auto *saved_mean = ctx.Input<Tensor>("SavedMean");
+    auto *saved_variance = ctx.Input<Tensor>("SavedVariance");
 
-                outputs = {
-                    "Y": block.var("y"),
-                    "MeanOut": block.var('mean'),  # share memory
-                    "VarianceOut": block.var('variance'),  # share memory
-                    "SavedMean": block.var('saved_mean'),
-                    "SavedVariance": block.var('saved_variance')
-                }
-                block.create_var(name="reserve_space", dtype='float32')
-                outputs["ReserveSpace"] = block.var('reserve_space')
-                bn_op = block.append_op(
-                    type="batch_norm",
-                    inputs=inputs,
-                    outputs=outputs,
-                    attrs=attrs)
-                block.create_var(name='y@GRAD', dtype='float32', shape=y.shape)
+    auto *x_grad = ctx.Output<Tensor>(framework::GradVarName("X"));
+    auto *scale_grad = ctx.Output<Tensor>(framework::GradVarName("Scale"));
+    auto *bias_grad = ctx.Output<Tensor>(framework::GradVarName("Bias"));
+    x_grad->mutable_data<T>(ctx.GetPlace());
+    scale_grad->mutable_data<T>(ctx.GetPlace());
+    bias_grad->mutable_data<T>(ctx.GetPlace());
 
-                # generate backward op_desc
-                grad_op_desc_list, op_grad_to_var = core.get_grad_op_desc(
-                    bn_op.desc, self.no_grad_set, [])
-                grad_op_desc = grad_op_desc_list[0]
-                new_op_desc = block.desc.append_op()
-                new_op_desc.copy_from(grad_op_desc)
-                for var_name in grad_op_desc.output_arg_names():
-                    block.desc.var(var_name.encode("ascii"))
-                grad_op_desc.infer_var_type(block.desc)
-                grad_op_desc.infer_shape(block.desc)
-                for arg in grad_op_desc.output_arg_names():
-                    grad_var = block.desc.find_var(arg.encode("ascii"))
-                    grad_var.set_dtype(core.VarDesc.VarType.FP32)
+    const bool is_test = ctx.Attr<bool>("is_test");
+    use_global_stats = is_test || use_global_stats;
 
-                program._sync_with_cpp()
+    Tensor x_tensor, y_grad_tensor, x_grad_tensor;
+    x_tensor.ShareDataWith(*x);
+    y_grad_tensor.ShareDataWith(*y_grad);
+    x_grad_tensor.ShareDataWith(*x_grad);
+    if (data_layout == "NHWC") {
+      x_tensor.set_layout(DataLayout::kNHWC);
+      y_grad_tensor.set_layout(DataLayout::kNHWC);
+      x_grad_tensor.set_layout(DataLayout::kNHWC);
+    }
+    const auto &runner = NpuOpRunner(
+        "BatchNormGrad",
+        {y_grad_tensor, x_tensor, *scale, *saved_mean, *saved_variance},
+        {x_grad_tensor, *scale_grad, *bias_grad, *saved_mean,
+         *saved_variance},  // segment fault if no reserve_space_3 and
+                            // reserve_space_4
+        {{"epsilon", epsilon},
+         {"is_training", true},
+         {"data_format", data_layout}});
+    auto stream = dev_ctx.stream();
+    runner.Run(stream);
+  }
+};
+}  // namespace operators
+}  // namespace paddle
 
-                exe = fluid.Executor(place)
-                out = exe.run(program,
-                              feed={
-                                  name: var_dict[name]
-                                  for name in [
-                                      'x', 'scale', 'bias', 'mean', 'variance',
-                                      'y@GRAD', 'momentum_var'
-                                  ]
-                              },
-                              fetch_list=self.fetch_list)
-
-            for id, name in enumerate(self.fetch_list):
-                if name == 'variance':
-                    self.__assert_close(
-                        var_dict[name], out[id], name, atol=1e-3)
-                    continue
-                self.__assert_close(var_dict[name], out[id], name)
-            print("op test forward passed: ", str(place), data_layout)
-
-        for data_format in self.data_formats:
-            test_with_place(core.NPUPlace(0), data_format, [2, 3, 4, 5])
-
-    def init_kernel_type(self):
-        pass
-
-
-@unittest.skipIf(not paddle.is_compiled_with_npu(),
-                 "core is not compiled with NPU")
-class TestBatchNormOpInference(unittest.TestCase):
-    def setUp(self):
-        self.dtype = np.float32
-        self.fuse_with_relu = False
-        self.init_kernel_type()
-        self.data_formats = ["NCHW", "NHWC"]
-
-    def __assert_close(self, tensor, np_array, msg, atol=1e-4):
-        self.assertTrue(np.allclose(np.array(tensor), np_array, atol=atol), msg)
-
-    def check_with_place(self, place, data_layout, dtype, shape):
-        epsilon = epsilon = 0.00001
-        if len(shape) == 2:
-            x_shape = shape
-            c = x_shape[1]
-        else:
-            n, h, w, c = shape[0], shape[1], shape[2], shape[3]
-            if data_layout == "NHWC":
-                x_shape = [n, h, w, c]
-            elif data_layout == "NCHW":
-                x_shape = [n, c, h, w]
-            else:
-                raise ValueError("Unknown data layout.")
-        scale_shape = [c]
-
-        x = np.random.random_sample(x_shape).astype(dtype)
-        x = x - 0.5
-        scale = np.random.random_sample(scale_shape).astype(np.float32)
-        bias = np.random.random_sample(scale_shape).astype(np.float32)
-        mean = np.zeros(scale_shape).astype(np.float32)
-        variance = np.ones(scale_shape).astype(np.float32)
-        y = _reference_testing(x, scale, bias, mean, variance, epsilon,
-                               data_layout).astype(dtype)
-        var_dict = locals()
-        var_names = ["x", "scale", "bias", "mean", "variance", "y"]
-        ground_truth = {name: var_dict[name] for name in var_names}
-        ground_truth["saved_mean"] = mean
-        ground_truth["saved_variance"] = variance
-
-        program = fluid.Program()
-        with fluid.program_guard(program):
-            block = program.global_block()
-            for name in ground_truth:
-                block.create_var(
-                    name=name, dtype="float32", shape=ground_truth[name].shape)
-            inputs = {
-                "X": block.var("x"),
-                "Scale": block.var("scale"),
-                "Bias": block.var("bias"),
-                "Mean": block.var("mean"),
-                "Variance": block.var("variance")
-            }
-            attrs = {
-                "epsilon": epsilon,
-                "is_test": True,
-                "data_layout": data_layout,
-                "use_mkldnn": False,
-                "fuse_with_relu": False,
-            }
-            outputs = {
-                "Y": block.var("y"),
-                "MeanOut": block.var("mean"),  # share memory
-                "VarianceOut": block.var("variance"),  # share memory
-                "SavedMean": block.var("saved_mean"),
-                "SavedVariance": block.var("saved_variance")
-            }
-            block.create_var(name="reserve_space", dtype='float32')
-            outputs["ReserveSpace"] = block.var('reserve_space')
-            bn_op = block.append_op(
-                type="batch_norm", inputs=inputs, outputs=outputs, attrs=attrs)
-
-            program._sync_with_cpp()
-
-            exe = fluid.Executor(place)
-            out = exe.run(
-                program,
-                feed={
-                    name: ground_truth[name]
-                    for name in ["x", "scale", "bias", "mean", "variance"]
-                },
-                fetch_list=["y"])
-            self.__assert_close(var_dict["y"], out[0], "y", atol=1e-3)
-
-    def test_check_output(self):
-        place = core.NPUPlace(0)
-        for data_format in self.data_formats:
-            self.check_with_place(place, data_format, self.dtype, [2, 3, 4, 5])
-            self.check_with_place(place, data_format, self.dtype, [2, 3])
-
-    def init_kernel_type(self):
-        pass
-
-
-if __name__ == "__main__":
-    unittest.main()
+REGISTER_OP_NPU_KERNEL(batch_norm,
+                       paddle::operators::NPUBatchNormOpKernel<float>);
+REGISTER_OP_NPU_KERNEL(batch_norm_grad,
+                       paddle::operators::NPUBatchNormGradOpKernel<float>);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2020 PaddlePaddle Authors. All Rights Reserved.
+/* Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -42,11 +42,11 @@ class NPUMomentumOpKernel : public framework::OpKernel<T> {
     framework::TensorCopy(*param, ctx.GetPlace(), dev_ctx, param_out);
     framework::TensorCopy(*velocity, ctx.GetPlace(), dev_ctx, velocity_out);
     const auto& runner = NpuOpRunner(
-        "ApplyMomentum", {*param_out, *velocity_out, *learning_rate, *grad, mu_tensor},
+        "ApplyMomentum",
+        {*param_out, *velocity_out, *learning_rate, *grad, mu_tensor},
         {*param_out}, {{"use_nesterov", use_nesterov}});
     auto stream = dev_ctx.stream();
     runner.Run(stream);
-
   }
 };
 }  // namespace operators

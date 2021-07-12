@@ -28,7 +28,8 @@ template <typename T>
 class ElementwiseAddNPUKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
-    auto& dev_ctx = ctx.template device_context<paddle::platform::NPUDeviceContext>();
+    auto& dev_ctx =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>();
     auto* x = ctx.Input<framework::LoDTensor>("X");
     auto* y = ctx.Input<framework::LoDTensor>("Y");
     auto* out = ctx.Output<framework::LoDTensor>("Out");
@@ -37,16 +38,8 @@ class ElementwiseAddNPUKernel : public framework::OpKernel<T> {
     Tensor transformed_x, transformed_y;
     if (x->dims() != y->dims()) {
       int axis = ctx.Attr<int>("axis");
-      NpuElementWiseOpBroadcast<T>(dev_ctx, x, y, axis, &transformed_x, &transformed_y);
-      // if (x->dims().size() >= y->dims().size()) {
-      //   transformed_x.ShareDataWith(*x);
-      //   transformed_y.mutable_data<T>(x->dims(), ctx.GetPlace());
-      //   NpuBroadcastTo<T>(ctx, x, y, axis, &transformed_y);
-      // } else {
-      //   transformed_y.ShareDataWith(*y);
-      //   transformed_x.mutable_data<T>(y->dims(), ctx.GetPlace());
-      //   NpuBroadcastTo<T>(ctx, y, x, axis, &transformed_x);
-      // }
+      NpuElementWiseOpBroadcast<T>(dev_ctx, x, y, axis, &transformed_x,
+                                   &transformed_y);
     } else {
       transformed_x.ShareDataWith(*x);
       transformed_y.ShareDataWith(*y);
@@ -176,146 +169,24 @@ template <typename T>
 class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
-    auto& dev_ctx = ctx.template device_context<paddle::platform::NPUDeviceContext>();
+    auto& dev_ctx =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>();
     auto* dout = ctx.Input<framework::Tensor>(framework::GradVarName("Out"));
     auto* dx = ctx.Output<framework::Tensor>(framework::GradVarName("X"));
     auto* dy = ctx.Output<framework::Tensor>(framework::GradVarName("Y"));
 
-
-#if 0
-    int axis = ctx.Attr<int>("axis");
-    axis = (axis == -1 ? std::abs(x->dims().size() - y->dims().size()) : axis);
-    auto stream = dev_ctx.stream();
-    if (dx) {
-      dx->mutable_data<T>(ctx.GetPlace());
-      std::vector<int64_t> reduce_axes;
-      if (dx->dims() != dout->dims()) {
-        framework::DDim trim_dx_dims = trim_trailing_singular_dims(dx->dims());
-        for (int64_t ax = 0; ax < dout->dims().size(); ax++) {
-          if ((ax < axis || ax >= trim_dx_dims.size() + axis) ||
-              (dout->dims()[ax] > 1 && trim_dx_dims[ax - axis] == 1)) {
-            reduce_axes.push_back(ax);
-          }
-        }
-        // dont care the axis with dim 1
-        if (!reduce_axes.empty()) {
-          const auto& runner =
-              NpuOpRunner("ReduceSumD", {*dout}, {*dx},
-                          {{"axes", reduce_axes}, {"keep_dims", false}});
-          runner.Run(stream);
-        }
-      } else {
-        framework::TensorCopy(
-            *dout, ctx.GetPlace(),
-            ctx.template device_context<platform::DeviceContext>(), dx);
-      }
-    }
-    if (dy) {
-      dy->mutable_data<T>(ctx.GetPlace());
-      std::vector<int64_t> reduce_axes;
-      if (dy->dims() != dout->dims()) {
-        framework::DDim trim_dy_dims = trim_trailing_singular_dims(dy->dims());
-        for (int64_t ax = 0; ax < dout->dims().size(); ax++) {
-          if ((ax < axis || ax >= trim_dy_dims.size() + axis) ||
-              (dout->dims()[ax] > 1 && trim_dy_dims[ax - axis] == 1)) {
-            reduce_axes.push_back(ax);
-          }
-        }
-        dont care the axis with dim 1
-        if (!reduce_axes.empty()) {
-          const auto& runner =
-              NpuOpRunner("ReduceSumD", {*dout}, {*dy},
-                          {{"axes", reduce_axes}, {"keep_dims", false}});
-          runner.Run(stream);
-        }
-      } else {
-        framework::TensorCopy(
-            *dout, ctx.GetPlace(),
-            ctx.template device_context<platform::DeviceContext>(), dy);
-      }
-    }
-#endif
-#if 0
-    int axis = ctx.Attr<int>("axis");
-    axis = (axis == -1 ? std::abs(x->dims().size() - y->dims().size()) : axis);
-    auto stream = dev_ctx.stream();
-    if (dx) {
-      dx->mutable_data<T>(ctx.GetPlace());
-      if (dx->dims() != dout->dims()) {
-        std::vector<int> dst_dims_vec;
-        std::vector<int> reduce_axes;
-        auto src_dims = dx->dims();
-        auto dout_dims = dout->dims();
-
-        int src_axis = (src_dims.size() < dout_dims.size()? axis: 0);
-        for (int ax = 0; ax < dout_dims.size(); ++ax) {
-          if ((ax < src_axis || ax >= src_axis + src_dims.size()) ||
-             (dout_dims[ax] > 1 && src_dims[ax - src_axis] == 1)) {
-               reduce_axes.push_back(ax);
-             } else {
-               dst_dims_vec.push_back(dout_dims[ax]);
-             }
-        }
-        if (!reduce_axes.empty()) {
-          Tensor tmp;
-          tmp.ShareDataWith(*dx);
-          tmp.Resize(framework::make_ddim(dst_dims_vec));
-          const auto& runner =
-              NpuOpRunner("ReduceSumD", {*dout}, {tmp},
-                          {{"axes", reduce_axes}, {"keep_dims", false}});
-          runner.Run(stream);
-        }
-      } else {
-        framework::TensorCopy(
-            *dout, ctx.GetPlace(), dev_ctx, dx);
-      }
-    }
-    if (dy) {
-      dy->mutable_data<T>(ctx.GetPlace());
-      if (dy->dims() != dout->dims()) {
-        std::vector<int> dst_dims_vec;
-        std::vector<int> reduce_axes;
-        auto src_dims = dy->dims();
-        auto dout_dims = dout->dims();
-
-        int src_axis = (src_dims.size() < dout_dims.size()? axis: 0);
-        for (int ax = 0; ax < dout_dims.size(); ++ax) {
-          if ((ax < src_axis || ax >= src_axis + src_dims.size()) ||
-             (dout_dims[ax] > 1 && src_dims[ax - src_axis] == 1)) {
-               reduce_axes.push_back(ax);
-             } else {
-               dst_dims_vec.push_back(dout_dims[ax]);
-             }
-        }
-        if (!reduce_axes.empty()) {
-          Tensor tmp;
-          tmp.ShareDataWith(*dy);
-          tmp.Resize(framework::make_ddim(dst_dims_vec));
-          const auto& runner =
-              NpuOpRunner("ReduceSumD", {*dout}, {tmp},
-                          {{"axes", reduce_axes}, {"keep_dims", false}});
-          runner.Run(stream);
-        }
-      } else {
-        framework::TensorCopy(
-            *dout, ctx.GetPlace(), dev_ctx, dy);
-      }
-    }
-#endif
     if (dx && !dy && dx->dims() == dout->dims()) {
       dx->mutable_data<T>(ctx.GetPlace());
-      framework::TensorCopy(
-          *dout, ctx.GetPlace(), dev_ctx, dx);
+      framework::TensorCopy(*dout, ctx.GetPlace(), dev_ctx, dx);
     } else if (dy && !dx && dy->dims() == dout->dims()) {
       dy->mutable_data<T>(ctx.GetPlace());
-      framework::TensorCopy(
-          *dout, ctx.GetPlace(), dev_ctx, dy);
+      framework::TensorCopy(*dout, ctx.GetPlace(), dev_ctx, dy);
     } else {
       auto* x = ctx.Input<framework::Tensor>("X");
       auto* y = ctx.Input<framework::Tensor>("Y");
 
-     // skip out
-      auto *out = dout;
+      // skip out
+      auto* out = dout;
       auto cpu_dev_ctx = platform::CPUDeviceContext(platform::CPUPlace());
       framework::Tensor cpu_out, cpu_dout, cpu_dx, cpu_dy;
       framework::Tensor *cpu_dx_ptr = nullptr, *cpu_dy_ptr = nullptr;
@@ -338,13 +209,19 @@ class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
       int axis = ctx.Attr<int>("axis");
       const framework::DDim x_dim = x->dims();
       const framework::DDim y_dim = y->dims();
-      auto cpu_ctx = framework::ExecutionContext(ctx.GetOp(), ctx.scope(), cpu_dev_ctx, framework::RuntimeContext({}, {}));
+      auto cpu_ctx =
+          framework::ExecutionContext(ctx.GetOp(), ctx.scope(), cpu_dev_ctx,
+                                      framework::RuntimeContext({}, {}));
       if (x_dim == y_dim) {
-        ElemwiseGradComputeNoBroadcast<platform::CPUDeviceContext, T, IdentityGrad<T>, IdentityGrad<T>>(
-            cpu_ctx, x_dim, y_dim, cpu_dout, cpu_dout, cpu_out, cpu_dout, axis, cpu_dx_ptr, cpu_dy_ptr, IdentityGrad<T>(), IdentityGrad<T>());
+        ElemwiseGradComputeNoBroadcast<platform::CPUDeviceContext, T,
+                                       IdentityGrad<T>, IdentityGrad<T>>(
+            cpu_ctx, x_dim, y_dim, cpu_dout, cpu_dout, cpu_out, cpu_dout, axis,
+            cpu_dx_ptr, cpu_dy_ptr, IdentityGrad<T>(), IdentityGrad<T>());
       } else {
-        ElemwiseGradComputeWithBroadcast<platform::CPUDeviceContext, T, IdentityGrad<T>, IdentityGrad<T>>(
-            cpu_ctx, x_dim, y_dim, cpu_dout, cpu_dout, cpu_out, cpu_dout, axis, cpu_dx_ptr, cpu_dy_ptr, IdentityGrad<T>(), IdentityGrad<T>());
+        ElemwiseGradComputeWithBroadcast<platform::CPUDeviceContext, T,
+                                         IdentityGrad<T>, IdentityGrad<T>>(
+            cpu_ctx, x_dim, y_dim, cpu_dout, cpu_dout, cpu_out, cpu_dout, axis,
+            cpu_dx_ptr, cpu_dy_ptr, IdentityGrad<T>(), IdentityGrad<T>());
       }
       if (dx) {
         framework::TensorCopy(cpu_dx, dev_ctx.GetPlace(), dev_ctx, dx);
@@ -362,7 +239,9 @@ class ElementwiseAddGradWithAxisNPUKernel : public framework::OpKernel<T> {
 namespace ops = paddle::operators;
 namespace plat = paddle::platform;
 
-REGISTER_OP_NPU_KERNEL(elementwise_add, ops::ElementwiseAddNPUKernel<float>);
+REGISTER_OP_NPU_KERNEL(elementwise_add, ops::ElementwiseAddNPUKernel<float>,
+                       ops::ElementwiseAddNPUKernel<plat::float16>);
 
 REGISTER_OP_NPU_KERNEL(elementwise_add_grad,
-                       ops::ElementwiseAddGradWithAxisNPUKernel<float>);
+                       ops::ElementwiseAddGradWithAxisNPUKernel<float>,
+                       ops::ElementwiseAddGradWithAxisNPUKernel<plat::float16>);

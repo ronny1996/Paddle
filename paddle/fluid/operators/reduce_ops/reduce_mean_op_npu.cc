@@ -1,4 +1,4 @@
-/* Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved.
+/* Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ limitations under the License. */
 #include "paddle/fluid/operators/elementwise/elementwise_npu.h"
 
 #include "paddle/fluid/operators/npu_op_runner.h"
-#include "paddle/fluid/platform/npu_helper.h"
 
 namespace paddle {
 namespace operators {
@@ -97,12 +96,14 @@ class NPUReduceMeanGradOpKernel : public framework::OpKernel<T> {
     }
     tmp_output_grad.ShareDataWith(*output_grad);
     tmp_output_grad.Resize(framework::make_ddim(tmp_output_dims_vec));
-    // NpuBroadcastTo<T>(ctx, input_grad, &tmp_output_grad, 0,
-    //                   &transformed_out_grad);
-    auto& dev_ctx = ctx.template device_context<paddle::platform::NPUDeviceContext>();
-    NpuElementWiseOpBroadcast<T>(dev_ctx, input_grad, &tmp_output_grad, 0, &transformed_input_grad, &transformed_out_grad);
-    const auto& runner2 = NpuOpRunner(
-        "Mul", {transformed_input_grad, transformed_out_grad}, {*input_grad}, {});
+    auto& dev_ctx =
+        ctx.template device_context<paddle::platform::NPUDeviceContext>();
+    NpuElementWiseOpBroadcast<T>(dev_ctx, input_grad, &tmp_output_grad, 0,
+                                 &transformed_input_grad,
+                                 &transformed_out_grad);
+    const auto& runner2 =
+        NpuOpRunner("Mul", {transformed_input_grad, transformed_out_grad},
+                    {*input_grad}, {});
     runner2.Run(stream);
   }
 };
@@ -110,7 +111,5 @@ class NPUReduceMeanGradOpKernel : public framework::OpKernel<T> {
 }  // namespace paddle
 
 namespace ops = paddle::operators;
-REGISTER_OP_NPU_KERNEL(reduce_mean,
-                       ops::NPUReduceMeanOpKernel<float>);
-REGISTER_OP_NPU_KERNEL(reduce_mean_grad,
-                       ops::NPUReduceMeanGradOpKernel<float>);
+REGISTER_OP_NPU_KERNEL(reduce_mean, ops::NPUReduceMeanOpKernel<float>);
+REGISTER_OP_NPU_KERNEL(reduce_mean_grad, ops::NPUReduceMeanGradOpKernel<float>);

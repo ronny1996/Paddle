@@ -1,4 +1,4 @@
-/* Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved.
+/* Copyright (c) 2021 PaddlePaddle Authors. All Rights Reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ limitations under the License. */
 #include "paddle/fluid/operators/math/padding.h"
 
 #include "paddle/fluid/operators/npu_op_runner.h"
-#include "paddle/fluid/platform/npu_helper.h"
 
 namespace paddle {
 namespace operators {
@@ -30,16 +29,13 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
  public:
   void Compute(const framework::ExecutionContext& ctx) const override {
     auto& dev_ctx = ctx.template device_context<platform::NPUDeviceContext>();
-    const Tensor* input = ctx.Input<Tensor>("Input");  // nhwc
-    auto* filter = ctx.Input<Tensor>("Filter");        // hwcn, c = i_c / groups
+    const Tensor* input = ctx.Input<Tensor>("Input");
+    auto* filter = ctx.Input<Tensor>("Filter");
     auto* output = ctx.Output<Tensor>("Output");
     output->mutable_data<T>(ctx.GetPlace());
-    const std::vector<int> strides =
-        ctx.Attr<std::vector<int>>("strides");  // nhwc, n,c must be set to 1
-    std::vector<int> paddings =
-        ctx.Attr<std::vector<int>>("paddings");  // t b l r
-    std::vector<int> dilations =
-        ctx.Attr<std::vector<int>>("dilations");  // nhwc, n,c must be set to 1
+    const std::vector<int> strides = ctx.Attr<std::vector<int>>("strides");
+    std::vector<int> paddings = ctx.Attr<std::vector<int>>("paddings");
+    std::vector<int> dilations = ctx.Attr<std::vector<int>>("dilations");
     int groups = ctx.Attr<int>("groups");
     const std::string padding_algorithm =
         ctx.Attr<std::string>("padding_algorithm");
@@ -84,11 +80,12 @@ class NPUConvOpKernel : public framework::OpKernel<T> {
       dilations_vec[3] = dilations[1];
     }
 
-    const auto& runner = NpuOpRunner("Conv2D", {input_tensor, *filter}, {output_tensor},
-                                     {{"strides", strides_vec},
-                                      {"pads", paddings},
-                                      {"dilations", dilations_vec},
-                                      {"groups", groups}});
+    const auto& runner =
+        NpuOpRunner("Conv2D", {input_tensor, *filter}, {output_tensor},
+                    {{"strides", strides_vec},
+                     {"pads", paddings},
+                     {"dilations", dilations_vec},
+                     {"groups", groups}});
 
     runner.Run(dev_ctx.stream());
   }
@@ -106,12 +103,9 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
     auto input_grad = ctx.Output<Tensor>(framework::GradVarName("Input"));
     auto filter_grad = ctx.Output<Tensor>(framework::GradVarName("Filter"));
 
-    const std::vector<int> strides =
-        ctx.Attr<std::vector<int>>("strides");  // nhwc, n,c must be set to 1
-    std::vector<int> paddings =
-        ctx.Attr<std::vector<int>>("paddings");  // t b l r
-    std::vector<int> dilations =
-        ctx.Attr<std::vector<int>>("dilations");  // nhwc, n,c must be set to 1
+    const std::vector<int> strides = ctx.Attr<std::vector<int>>("strides");
+    std::vector<int> paddings = ctx.Attr<std::vector<int>>("paddings");
+    std::vector<int> dilations = ctx.Attr<std::vector<int>>("dilations");
     int groups = ctx.Attr<int>("groups");
     const std::string padding_algorithm =
         ctx.Attr<std::string>("padding_algorithm");
@@ -163,18 +157,14 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
       std::vector<int> filter_shape_vec =
           framework::vectorize<int>(filter->dims());
 
-      // Tensor filter_grad_tensor;
-      // filter_grad_tensor.ShareDataWith(*filter_grad);
-      // if (channel_last) {
-      //   filter_grad_tensor.set_layout(DataLayout::kNHWC);
-      // }
-      const auto& runner = NpuOpRunner("Conv2DBackpropFilterD", {input_tensor, output_grad_tensor},
-                      {*filter_grad}, {{"filter_size", filter_shape_vec},
-                                       {"strides", strides_vec},
-                                       {"pads", paddings},
-                                       {"dilations", dilations_vec},
-                                       {"groups", groups},
-                                       {"data_format", data_format_str}});
+      const auto& runner = NpuOpRunner(
+          "Conv2DBackpropFilterD", {input_tensor, output_grad_tensor},
+          {*filter_grad}, {{"filter_size", filter_shape_vec},
+                           {"strides", strides_vec},
+                           {"pads", paddings},
+                           {"dilations", dilations_vec},
+                           {"groups", groups},
+                           {"data_format", data_format_str}});
       runner.Run(dev_ctx.stream());
     }
     if (input_grad) {
@@ -187,13 +177,14 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
       if (channel_last) {
         input_grad_tensor.set_layout(DataLayout::kNHWC);
       }
-      const auto& runner = NpuOpRunner("Conv2DBackpropInputD", {*filter, output_grad_tensor},
+      const auto& runner =
+          NpuOpRunner("Conv2DBackpropInputD", {*filter, output_grad_tensor},
                       {input_grad_tensor}, {{"input_size", input_shape_vec},
-                                      {"strides", strides_vec},
-                                      {"pads", paddings},
-                                      {"dilations", dilations_vec},
-                                      {"groups", groups},
-                                      {"data_format", data_format_str}});
+                                            {"strides", strides_vec},
+                                            {"pads", paddings},
+                                            {"dilations", dilations_vec},
+                                            {"groups", groups},
+                                            {"data_format", data_format_str}});
       runner.Run(dev_ctx.stream());
     }
   }
@@ -201,8 +192,6 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
 }  // namespace operators
 }  // namespace paddle
 
-REGISTER_OP_NPU_KERNEL(conv2d, paddle::operators::NPUConvOpKernel<float>,
-                       paddle::operators::NPUConvOpKernel<paddle::platform::float16>);
+REGISTER_OP_NPU_KERNEL(conv2d, paddle::operators::NPUConvOpKernel<float>);
 REGISTER_OP_NPU_KERNEL(conv2d_grad,
-                       paddle::operators::NPUConvGradOpKernel<float>,
-                       paddle::operators::NPUConvGradOpKernel<paddle::platform::float16>);
+                       paddle::operators::NPUConvGradOpKernel<float>);

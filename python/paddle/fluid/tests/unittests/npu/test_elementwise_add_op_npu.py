@@ -65,6 +65,9 @@ class TestElementwiseAddOp(OpTest):
         self.check_output_with_place(self.place, check_dygraph=False)
 
     def test_check_grad_normal(self):
+        if self.dtype == np.float16:
+            return
+
         self.check_grad_with_place(
             self.place, ['X', 'Y'],
             'Out',
@@ -72,6 +75,9 @@ class TestElementwiseAddOp(OpTest):
             check_dygraph=False)
 
     def test_check_grad_ingore_x(self):
+        if self.dtype == np.float16:
+            return
+
         self.check_grad_with_place(
             self.place, ['Y'],
             'Out',
@@ -80,12 +86,76 @@ class TestElementwiseAddOp(OpTest):
             check_dygraph=False)
 
     def test_check_grad_ingore_y(self):
+        if self.dtype == np.float16:
+            return
+
         self.check_grad_with_place(
             self.place, ['X'],
             'Out',
             no_grad_set=set("Y"),
             max_relative_error=0.006,
             check_dygraph=False)
+
+
+@unittest.skipIf(not paddle.is_compiled_with_npu(),
+                 "core is not compiled with NPU")
+class TestElementwiseAddOpFp16(TestElementwiseAddOp):
+    def init_dtype(self):
+        self.dtype = np.float16
+
+
+@unittest.skipIf(not paddle.is_compiled_with_npu(),
+                 "core is not compiled with NPU")
+class TestElementwiseAddOp2(TestElementwiseAddOp):
+    def init_input_output(self):
+        self.x = np.random.rand(100, 2, 3).astype(self.dtype)
+        self.y = np.random.rand(100).astype(self.dtype)
+        self.out = self.x + self.y.reshape(100, 1, 1)
+
+    def init_axis(self):
+        self.axis = 0
+
+
+@unittest.skipIf(not paddle.is_compiled_with_npu(),
+                 "core is not compiled with NPU")
+class TestElementwiseAddOp3(TestElementwiseAddOp):
+    def init_input_output(self):
+        self.x = np.random.rand(2, 100, 3).astype(self.dtype)
+        self.y = np.random.rand(100).astype(self.dtype)
+        self.out = self.x + self.y.reshape(1, 100, 1)
+
+    def init_axis(self):
+        self.axis = 1
+
+
+@unittest.skipIf(not paddle.is_compiled_with_npu(),
+                 "core is not compiled with NPU")
+class TestElementwiseAddOp4(TestElementwiseAddOp):
+    def init_input_output(self):
+        self.x = np.random.rand(2, 3, 100).astype(self.dtype)
+        self.y = np.random.rand(100).astype(self.dtype)
+        self.out = self.x + self.y.reshape(1, 1, 100)
+
+    def init_axis(self):
+        self.axis = 2
+
+
+@unittest.skipIf(not paddle.is_compiled_with_npu(),
+                 "core is not compiled with NPU")
+class TestElementwiseAddOp5(TestElementwiseAddOp):
+    def init_input_output(self):
+        self.x = np.random.rand(1, 1, 20, 5).astype(self.dtype)
+        self.y = np.random.rand(20, 5, 1, 1).astype(self.dtype)
+        self.out = self.x + self.y
+
+
+@unittest.skipIf(not paddle.is_compiled_with_npu(),
+                 "core is not compiled with NPU")
+class TestElementwiseAddOp6(TestElementwiseAddOp):
+    def init_input_output(self):
+        self.x = np.random.rand(10, 3, 1, 4).astype(self.dtype)
+        self.y = np.random.rand(10, 1, 12, 1).astype(self.dtype)
+        self.out = self.x + self.y
 
 
 @unittest.skipIf(not paddle.is_compiled_with_npu(),

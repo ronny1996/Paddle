@@ -12,12 +12,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 #include "paddle/fluid/operators/conv_op.h"
-#include "paddle/fluid/framework/fleet/ascend_wrapper.h"
-#include "paddle/fluid/framework/generator.h"
-#include "paddle/fluid/framework/op_registry.h"
-#include "paddle/fluid/framework/operator.h"
-#include "paddle/fluid/operators/fill_constant_op.h"
-#include "paddle/fluid/operators/math/padding.h"
 
 #include "paddle/fluid/operators/npu_op_runner.h"
 
@@ -190,6 +184,10 @@ class NPUConvGradOpKernel : public framework::OpKernel<T> {
 }  // namespace operators
 }  // namespace paddle
 
-REGISTER_OP_NPU_KERNEL(conv2d, paddle::operators::NPUConvOpKernel<float>);
-REGISTER_OP_NPU_KERNEL(conv2d_grad,
-                       paddle::operators::NPUConvGradOpKernel<float>);
+namespace ops = paddle::operators;
+namespace plat = paddle::platform;
+
+REGISTER_OP_NPU_KERNEL(conv2d, ops::NPUConvOpKernel<float>,
+                       ops::NPUConvOpKernel<plat::float16>);
+REGISTER_OP_NPU_KERNEL(conv2d_grad, ops::NPUConvGradOpKernel<float>,
+                       ops::NPUConvGradOpKernel<plat::float16>);
